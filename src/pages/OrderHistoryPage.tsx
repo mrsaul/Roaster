@@ -8,20 +8,37 @@ import { ClipboardList, House, ShoppingBag } from "lucide-react";
 
 interface OrderHistoryPageProps {
   orders: Order[];
+  draftItems: Order["items"];
+  draftTotalKg: number;
+  draftTotalPrice: number;
   onGoHome: () => void;
   onGoShop: () => void;
   onViewOrders: () => void;
 }
 
-export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrders }: OrderHistoryPageProps) {
-  const [activeTab, setActiveTab] = useState<"in-progress" | "order-placed">("order-placed");
+export default function OrderHistoryPage({ orders, draftItems, draftTotalKg, draftTotalPrice, onGoHome, onGoShop, onViewOrders }: OrderHistoryPageProps) {
+  const [activeTab, setActiveTab] = useState<"in-progress" | "order-placed">("in-progress");
+
+  const draftOrder: Order | null = draftItems.length > 0
+    ? {
+        id: "Draft order",
+        items: draftItems,
+        totalKg: draftTotalKg,
+        totalPrice: draftTotalPrice,
+        deliveryDate: new Date().toISOString(),
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      }
+    : null;
 
   const groupedOrders = useMemo(() => {
+    const inProgressOrders = orders.filter((order) => order.status === "pending" || order.status === "confirmed" || order.status === "fulfilled");
+
     return {
-      inProgress: orders.filter((order) => order.status === "pending" || order.status === "confirmed" || order.status === "fulfilled"),
+      inProgress: draftOrder ? [draftOrder, ...inProgressOrders] : inProgressOrders,
       orderPlaced: orders.filter((order) => order.status === "synced"),
     };
-  }, [orders]);
+  }, [draftOrder, orders]);
 
   const visibleOrders = activeTab === "in-progress" ? groupedOrders.inProgress : groupedOrders.orderPlaced;
 
@@ -67,33 +84,40 @@ export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrd
           {visibleOrders.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-12">No orders in this section yet.</p>
           )}
-          {visibleOrders.map((order) => (
-            <motion.div
-              key={order.id}
-              variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-              className="bg-card border border-border rounded-lg p-4 space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-sm text-foreground">{order.id}</span>
-                <StatusBadge status={order.status} sellsyId={order.sellsyId} />
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {format(parseISO(order.createdAt), "MMM d, yyyy")}
-                </span>
-                <span className="tabular-nums text-foreground font-medium">
-                  {order.totalKg.toFixed(1)} kg · €{order.totalPrice.toFixed(2)}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {order.items.map((item) => (
-                  <span key={item.product.id} className="inline-block mr-3">
-                    {item.product.name} ({item.quantity}kg)
+          {visibleOrders.map((order) => {
+            const isDraft = order.id === "Draft order";
+
+            return (
+              <motion.div
+                key={`${order.id}-${isDraft ? "draft" : order.createdAt}`}
+                variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
+                className={cn(
+                  "border rounded-lg p-4 space-y-3",
+                  isDraft ? "bg-secondary/40 border-primary/30" : "bg-card border-border"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm text-foreground">{order.id}</span>
+                  <StatusBadge status={order.status} sellsyId={order.sellsyId} />
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {isDraft ? "From current cart" : format(parseISO(order.createdAt), "MMM d, yyyy")}
                   </span>
-                ))}
-              </div>
-            </motion.div>
-          ))}
+                  <span className="tabular-nums text-foreground font-medium">
+                    {order.totalKg.toFixed(1)} kg · €{order.totalPrice.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {order.items.map((item) => (
+                    <span key={item.product.id} className="inline-block mr-3">
+                      {item.product.name} ({item.quantity}kg)
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            );
+          })}
         </motion.div>
       </main>
       <div className="fixed inset-x-0 bottom-4 z-50 px-4">
@@ -114,10 +138,11 @@ export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrd
           </button>
           <button
             onClick={onViewOrders}
-            className="flex flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 text-sm font-medium text-foreground"
+            className="relative flex flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 text-sm font-medium text-foreground"
           >
             <ClipboardList className="h-4 w-4" />
             Orders
+            {draftItems.length > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-success" aria-hidden="true" /> : null}
           </button>
         </div>
       </div>
