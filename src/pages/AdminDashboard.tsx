@@ -262,6 +262,8 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   }, []);
 
   const insights = useMemo(() => buildClientInsights(selectedClient), [selectedClient]);
+  const latestParseErrors = syncRun?.parse_errors ?? [];
+  const latestSyncTimestamp = syncRun?.completed_at ?? syncRun?.created_at ?? null;
 
   const sectionLabel =
     activeSection === "orders"
