@@ -67,7 +67,7 @@ const mapPersistedOrder = (order: PersistedOrderRow): Order => ({
 });
 
 const Index = () => {
-  const [view, setView] = useState<View>("catalog");
+  const [view, setView] = useState<View>("home");
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
