@@ -23,7 +23,9 @@ interface CatalogPageProps {
     totalPrice: number;
     getQuantity: (id: string) => number;
     updateQuantity: (product: Product, qty: number) => void;
+    hydrateCart: (items: { product: Product; quantity: number }[]) => void;
   };
+  usualOrderItems: { product: Product; quantity: number }[];
   onCheckout: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
@@ -67,7 +69,7 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export default function CatalogPage({ cart, onCheckout, onViewOrders, onLogout }: CatalogPageProps) {
+export default function CatalogPage({ cart, usualOrderItems, onCheckout, onViewOrders, onLogout }: CatalogPageProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
@@ -110,35 +112,32 @@ export default function CatalogPage({ cart, onCheckout, onViewOrders, onLogout }
 
   const visibleProducts = useMemo(() => products.filter((product) => product.available), [products]);
 
-  const usualOrderProducts = useMemo(() => {
+  const fallbackUsualOrderProducts = useMemo(() => {
     return USUAL_ORDER_PRESET.map((preset) => {
       const product = visibleProducts.find((item) => normalizeName(item.name).includes(normalizeName(preset.name)));
       return product ? { product, quantity: preset.quantity } : null;
     }).filter((entry): entry is { product: Product; quantity: number } => Boolean(entry));
   }, [visibleProducts]);
 
+  const resolvedUsualOrderItems = usualOrderItems.length > 0 ? usualOrderItems : fallbackUsualOrderProducts;
+
   useEffect(() => {
-    if (initializedUsualOrder.current || usualOrderProducts.length === 0) {
+    if (initializedUsualOrder.current || resolvedUsualOrderItems.length === 0) {
       return;
     }
 
-    usualOrderProducts.forEach(({ product, quantity }) => {
-      if (cart.getQuantity(product.id) === 0) {
-        cart.updateQuantity(product, quantity);
-      }
-    });
-
+    cart.hydrateCart(resolvedUsualOrderItems);
     initializedUsualOrder.current = true;
-  }, [cart, usualOrderProducts]);
+  }, [cart, resolvedUsualOrderItems]);
 
   const usualOrderTotal = useMemo(() => {
-    return usualOrderProducts.reduce((sum, { product }) => {
+    return resolvedUsualOrderItems.reduce((sum, { product }) => {
       const quantity = cart.getQuantity(product.id);
       return sum + quantity * product.pricePerKg;
     }, 0);
-  }, [cart, usualOrderProducts]);
+  }, [cart, resolvedUsualOrderItems]);
 
-  const usualOrderHasItems = usualOrderProducts.some(({ product }) => cart.getQuantity(product.id) > 0);
+  const usualOrderHasItems = resolvedUsualOrderItems.some(({ product }) => cart.getQuantity(product.id) > 0);
   const deliveryLabel = deliveryDate ? format(new Date(`${deliveryDate}T00:00:00`), "EEEE") : getNextWeekdayLabel();
 
   return (
