@@ -434,10 +434,21 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                         Latest Sellsy product import, synced count, and any price parsing issues.
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" className="gap-2 self-start" onClick={() => void loadLatestProductSync()}>
-                      <RefreshCw className="h-4 w-4" />
-                      refresh status
-                    </Button>
+                    <div className="flex flex-wrap gap-2 self-start">
+                      <Button
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => void runProductSync()}
+                        disabled={runningProductSync}
+                      >
+                        <RefreshCw className={cn("h-4 w-4", runningProductSync && "animate-spin")} />
+                        {runningProductSync ? "running sync..." : "run product sync"}
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadLatestProductSync()} disabled={runningProductSync}>
+                        <RefreshCw className="h-4 w-4" />
+                        refresh status
+                      </Button>
+                    </div>
                   </div>
 
                   {syncRunError ? (
