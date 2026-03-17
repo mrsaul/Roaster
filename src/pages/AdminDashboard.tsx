@@ -4,9 +4,17 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
 
-type ProductRow = Tables<"products">;
+type AdminProductRow = {
+  id: string;
+  sku: string | null;
+  name: string;
+  origin: string | null;
+  roast_level: string | null;
+  price_per_kg: number;
+  is_active: boolean;
+  synced_at: string;
+};
 
 interface AdminDashboardProps {
   orders: Order[];
