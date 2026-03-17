@@ -280,7 +280,31 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
         ) : null}
       </main>
 
-      <CartBar totalKg={cart.totalKg} totalPrice={cart.totalPrice} onCheckout={onCheckout} />
+      <div className="fixed inset-x-0 bottom-4 z-50 px-4">
+        <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
+          <button
+            onClick={onGoHome}
+            className={mode === "home" ? "flex flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 text-sm font-medium text-foreground" : "flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+          >
+            <House className="h-4 w-4" />
+            Home
+          </button>
+          <button
+            onClick={onGoShop}
+            className={mode === "shop" ? "flex flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 text-sm font-medium text-foreground" : "flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            Shop
+          </button>
+          <button
+            onClick={onViewOrders}
+            className="flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ClipboardList className="h-4 w-4" />
+            Orders
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
