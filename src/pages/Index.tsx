@@ -291,6 +291,8 @@ const Index = () => {
           draftItems={cart.items}
           draftTotalKg={cart.totalKg}
           draftTotalPrice={cart.totalPrice}
+          draftDeliveryDate={draftDeliveryDate}
+          onDraftDeliveryDateChange={setDraftDeliveryDate}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
