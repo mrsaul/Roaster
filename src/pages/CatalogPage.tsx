@@ -149,43 +149,18 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="max-w-lg mx-auto space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-base font-medium tracking-tight text-foreground">PluralRoaster</h1>
-              <p className="text-xs text-muted-foreground">{mode === "home" ? "Your latest order" : "Full catalog"}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors" aria-label="Logout">
-                <LogOut className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-medium tracking-tight text-foreground">PluralRoaster</h1>
+            <p className="text-xs text-muted-foreground">{mode === "home" ? "Your latest order" : "Full catalog"}</p>
           </div>
-
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
-            <button
-              onClick={onGoHome}
-              className={mode === "home" ? "rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
-            >
-              Home
-            </button>
-            <button
-              onClick={onGoShop}
-              className={mode === "shop" ? "rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm" : "rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"}
-            >
-              Shop
-            </button>
-            <button
-              onClick={onViewOrders}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Orders
-            </button>
-          </div>
+          <button onClick={onLogout} className="p-2 rounded-full border border-border bg-card/80 shadow-sm transition-colors hover:bg-muted" aria-label="Logout">
+            <LogOut className="w-5 h-5 text-muted-foreground" />
+          </button>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-6">
+      <main className="max-w-lg mx-auto px-4 py-4 pb-40 space-y-6">
         {mode === "home" ? (
           <section className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-5">
             <div>
