@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { LogOut, Package, CheckCircle, Clock, RefreshCw } from "lucide-react";
+import { LogOut, Package, CheckCircle, Clock, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_PRODUCTS, MOCK_ORDERS, type Order } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 
 interface AdminDashboardProps {
@@ -10,14 +12,46 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
+  const [syncingProducts, setSyncingProducts] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ count: number; at: string } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   const allOrders = [...MOCK_ORDERS, ...orders];
   const pendingCount = allOrders.filter((o) => o.status === "pending" || o.status === "confirmed").length;
   const syncedCount = allOrders.filter((o) => o.status === "synced").length;
   const totalRevenue = allOrders.reduce((s, o) => s + o.totalPrice, 0);
 
+  const handleSellsyProductSync = async () => {
+    setSyncingProducts(true);
+    setSyncError(null);
+    setSyncResult(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "sync-products" },
+      });
+
+      if (error) {
+        throw new Error(error.message || "Sellsy sync failed");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Unable to import products from Sellsy");
+      }
+
+      setSyncResult({
+        count: Number(data.syncedCount ?? 0),
+        at: new Date().toISOString(),
+      });
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Unknown Sellsy sync error");
+    } finally {
+      setSyncingProducts(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
       <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
         <h1 className="text-base font-medium text-foreground tracking-tight mb-1">PluralRoaster</h1>
         <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
@@ -33,10 +67,8 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
         </button>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 p-4 lg:p-8">
         <div className="max-w-5xl mx-auto">
-          {/* Mobile header */}
           <div className="flex lg:hidden items-center justify-between mb-6">
             <div>
               <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
@@ -47,7 +79,6 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
             </button>
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             {[
               { label: "To Fulfill", value: pendingCount, icon: Clock, color: "text-primary" },
@@ -65,7 +96,55 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
             ))}
           </div>
 
-          {/* Orders table */}
+          <section className="mb-8">
+            <div className="bg-card border border-border rounded-lg p-4 lg:p-5">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-medium text-foreground">Sellsy Product Sync</h2>
+                  <p className="text-xs text-muted-foreground mt-1">Import the latest coffee catalog from Sellsy into Lovable Cloud.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSellsyProductSync}
+                  disabled={syncingProducts}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium transition-opacity disabled:opacity-50"
+                >
+                  {syncingProducts ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Syncing products…
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Sync Sellsy Products
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {syncResult ? (
+                <div className="mt-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">Imported {syncResult.count} product{syncResult.count === 1 ? "" : "s"}.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Last sync: {format(parseISO(syncResult.at), "MMM d, HH:mm")}</p>
+                </div>
+              ) : null}
+
+              {syncError ? (
+                <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Product sync failed</p>
+                      <p className="text-xs text-muted-foreground mt-1">{syncError}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
           <section>
             <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Orders</h2>
             <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -100,7 +179,6 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
             </div>
           </section>
 
-          {/* Products */}
           <section className="mt-8">
             <h2 className="text-sm font-medium text-muted-foreground mb-3">Catalog ({MOCK_PRODUCTS.length} products)</h2>
             <div className="bg-card border border-border rounded-lg overflow-hidden">
