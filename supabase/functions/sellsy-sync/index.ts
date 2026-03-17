@@ -27,6 +27,14 @@ type ProductRow = {
   synced_at: string;
 };
 
+type ProductParseError = {
+  sellsy_id: string | null;
+  sku: string | null;
+  name: string | null;
+  message: string;
+  available_keys: string[];
+};
+
 type AdminClientRow = {
   id: string;
   name: string;

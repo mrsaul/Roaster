@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck, Receipt, ExternalLink, Download, RefreshCw } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck, Receipt, ExternalLink, Download, RefreshCw, AlertCircle, CheckCircle2, Clock3 } from "lucide-react";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { StatusBadge } from "@/components/StatusBadge";
