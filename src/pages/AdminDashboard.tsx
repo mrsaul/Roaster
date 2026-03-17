@@ -201,8 +201,31 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     }
   };
 
+  const loadLatestProductSync = async () => {
+    setSyncRunError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from("sync_runs")
+        .select("id, status, synced_count, parse_errors, completed_at, created_at")
+        .eq("source", "sellsy")
+        .eq("sync_type", "products")
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message || "Sync status fetch failed");
+      }
+
+      setSyncRun((data as SyncRunRow | null) ?? null);
+    } catch (error) {
+      setSyncRunError(error instanceof Error ? error.message : "Unknown sync status error");
+    }
+  };
+
   useEffect(() => {
-    void Promise.all([loadClients(), loadProducts()]);
+    void Promise.all([loadClients(), loadProducts(), loadLatestProductSync()]);
   }, []);
 
   const clientSummary = useMemo(() => {
