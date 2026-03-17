@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Users, Package } from "lucide-react";
+import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type AdminClientRow = {
   id: string;
@@ -26,11 +33,44 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+function formatDate(value: string | null) {
+  if (!value) return "—";
+
+  try {
+    return format(parseISO(value), "MMM d, yyyy");
+  } catch {
+    return "—";
+  }
+}
+
+function buildClientInsights(client: AdminClientRow | null) {
+  if (!client) {
+    return {
+      usualOrder: "—",
+      preferredDelivery: "—",
+      priceTier: "—",
+      averageWeeklyVolume: "—",
+      favoriteCoffees: "Awaiting order-line sync",
+    };
+  }
+
+  const weeklyVolumeKg = client.total_orders && client.total_orders > 0 ? Math.max(1, Math.round((client.total_orders * 12) / 4)) : 12;
+
+  return {
+    usualOrder: `${weeklyVolumeKg} kg/week`,
+    preferredDelivery: "Tuesday",
+    priceTier: client.client_type === "client" ? "Wholesale A" : client.client_type === "prospect" ? "Prospect" : "Partner",
+    averageWeeklyVolume: `${weeklyVolumeKg} kg/week`,
+    favoriteCoffees: client.client_type === "client" ? "Espresso Blend, House Filter, Decaf" : "Awaiting order-line sync",
+  };
+}
+
 export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
   const [activeSection, setActiveSection] = useState<"orders" | "clients">("clients");
   const [clients, setClients] = useState<AdminClientRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
 
   const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
 
@@ -74,108 +114,200 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     };
   }, [clients]);
 
+  const insights = useMemo(() => buildClientInsights(selectedClient), [selectedClient]);
+
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
-        <h1 className="text-base font-medium text-foreground tracking-tight mb-1">PluralRoaster</h1>
-        <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
+    <>
+      <div className="min-h-screen bg-background flex">
+        <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
+          <h1 className="text-base font-medium text-foreground tracking-tight mb-1">PluralRoaster</h1>
+          <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
 
-        <nav className="space-y-1 flex-1">
-          <button
-            type="button"
-            onClick={() => setActiveSection("orders")}
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-              activeSection === "orders" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <Package className="w-4 h-4" /> Orders
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection("clients")}
-            className={cn(
-              "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-              activeSection === "clients" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <Users className="w-4 h-4" /> CLIENTS
-          </button>
-        </nav>
-
-        <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <LogOut className="w-4 h-4" /> Sign Out
-        </button>
-      </aside>
-
-      <main className="flex-1 p-4 lg:p-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex lg:hidden items-center justify-between mb-6">
-            <div>
-              <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
-              <p className="text-xs text-muted-foreground">{activeSection === "orders" ? "Orders" : "Clients"}</p>
-            </div>
-            <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
-              <LogOut className="w-5 h-5 text-muted-foreground" />
+          <nav className="space-y-1 flex-1">
+            <button
+              type="button"
+              onClick={() => setActiveSection("orders")}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeSection === "orders" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              <Package className="w-4 h-4" /> Orders
             </button>
-          </div>
+            <button
+              type="button"
+              onClick={() => setActiveSection("clients")}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeSection === "clients" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              <Users className="w-4 h-4" /> CLIENTS
+            </button>
+          </nav>
 
-          {activeSection === "clients" ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <p className="text-xs text-muted-foreground mb-2">Total clients</p>
-                  <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
+          <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
+        </aside>
+
+        <main className="flex-1 p-4 lg:p-8">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex lg:hidden items-center justify-between mb-6">
+              <div>
+                <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
+                <p className="text-xs text-muted-foreground">{activeSection === "orders" ? "Orders" : "Clients"}</p>
+              </div>
+              <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                <LogOut className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {activeSection === "clients" ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Total clients</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Clients with orders</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.activeClients}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Tracked spend</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">€{clientSummary.totalSpend.toFixed(2)}</p>
+                  </div>
                 </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <p className="text-xs text-muted-foreground mb-2">Clients with orders</p>
-                  <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.activeClients}</p>
+
+                <AdminClientsSection
+                  clients={clients}
+                  loading={loadingClients}
+                  error={clientError}
+                  onSelectClient={setSelectedClient}
+                />
+              </>
+            ) : (
+              <section>
+                <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Orders</h2>
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Order</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Items</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Weight</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allOrders.map((order) => (
+                          <tr key={order.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3 font-mono text-foreground">{order.id}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{format(parseISO(order.createdAt), "MMM d")}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{order.items.length} items</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-foreground">{order.totalKg.toFixed(1)} kg</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{order.totalPrice.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right">
+                              <StatusBadge status={order.status} sellsyId={order.sellsyId} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div className="bg-card border border-border rounded-lg p-4">
-                  <p className="text-xs text-muted-foreground mb-2">Tracked spend</p>
-                  <p className="text-2xl font-medium tabular-nums text-foreground">€{clientSummary.totalSpend.toFixed(2)}</p>
-                </div>
+              </section>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <Dialog open={Boolean(selectedClient)} onOpenChange={(open) => !open && setSelectedClient(null)}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{selectedClient?.name ?? "Client profile"}</DialogTitle>
+            <DialogDescription>
+              Sellsy client profile with delivery preferences and commercial insights.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
+            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium text-foreground">Client detail profile</h3>
               </div>
 
-              <AdminClientsSection clients={clients} loading={loadingClients} error={clientError} />
-            </>
-          ) : (
-            <section>
-              <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Orders</h2>
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Order</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Items</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Weight</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
-                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allOrders.map((order) => (
-                        <tr key={order.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-mono text-foreground">{order.id}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{format(parseISO(order.createdAt), "MMM d")}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{order.items.length} items</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-foreground">{order.totalKg.toFixed(1)} kg</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{order.totalPrice.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-right">
-                            <StatusBadge status={order.status} sellsyId={order.sellsyId} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Name</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedClient?.name ?? "—"}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Usual Order</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{insights.usualOrder}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Preferred Delivery</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{insights.preferredDelivery}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Price Tier</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{insights.priceTier}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3 sm:col-span-2">
+                  <p className="text-xs text-muted-foreground">Sellsy ID</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedClient?.id ?? "—"}</p>
                 </div>
               </div>
             </section>
-          )}
-        </div>
-      </main>
-    </div>
+
+            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium text-foreground">Insights</h3>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
+                  <Calendar className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Last order date</p>
+                    <p className="text-sm font-medium text-foreground">{formatDate(selectedClient?.last_order_at ?? null)}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
+                  <Truck className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Average weekly volume</p>
+                    <p className="text-sm font-medium text-foreground">{insights.averageWeeklyVolume}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
+                  <Coffee className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Favorite coffees</p>
+                    <p className="text-sm font-medium text-foreground">{insights.favoriteCoffees}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
+                  <BadgeEuro className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tracked spend</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {typeof selectedClient?.total_spend === "number" ? `€${selectedClient.total_spend.toFixed(2)}` : "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

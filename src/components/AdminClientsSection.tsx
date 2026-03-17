@@ -1,4 +1,4 @@
-import { AlertCircle, Users } from "lucide-react";
+import { AlertCircle, ChevronRight, Users } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import {
   Table,
@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 
 type AdminClientRow = {
   id: string;
@@ -27,6 +28,7 @@ interface AdminClientsSectionProps {
   clients: AdminClientRow[];
   loading: boolean;
   error: string | null;
+  onSelectClient: (client: AdminClientRow) => void;
 }
 
 function formatLocation(client: AdminClientRow) {
@@ -44,7 +46,7 @@ function formatLastOrder(value: string | null) {
   }
 }
 
-export function AdminClientsSection({ clients, loading, error }: AdminClientsSectionProps) {
+export function AdminClientsSection({ clients, loading, error, onSelectClient }: AdminClientsSectionProps) {
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-3">
@@ -75,18 +77,19 @@ export function AdminClientsSection({ clients, loading, error }: AdminClientsSec
               <TableHead className="text-right">Orders</TableHead>
               <TableHead className="text-right">Spend</TableHead>
               <TableHead className="text-right">Last order</TableHead>
+              <TableHead className="text-right">Profile</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
                   Loading clients…
                 </TableCell>
               </TableRow>
             ) : clients.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
                   No clients found.
                 </TableCell>
               </TableRow>
@@ -107,6 +110,12 @@ export function AdminClientsSection({ clients, loading, error }: AdminClientsSec
                     {typeof client.total_spend === "number" ? `€${client.total_spend.toFixed(2)}` : "—"}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">{formatLastOrder(client.last_order_at)}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => onSelectClient(client)}>
+                      Open
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
