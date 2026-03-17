@@ -1,10 +1,20 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import { LogOut, Package, CheckCircle, Clock, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
-import { MOCK_PRODUCTS, MOCK_ORDERS, type Order } from "@/lib/store";
+import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
+
+type AdminProductRow = {
+  id: string;
+  sku: string | null;
+  name: string;
+  origin: string | null;
+  roast_level: string | null;
+  price_per_kg: number;
+  is_active: boolean;
+  synced_at: string;
+};
 
 interface AdminDashboardProps {
   orders: Order[];
@@ -15,11 +25,45 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [syncResult, setSyncResult] = useState<{ count: number; at: string } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [products, setProducts] = useState<AdminProductRow[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   const allOrders = [...MOCK_ORDERS, ...orders];
   const pendingCount = allOrders.filter((o) => o.status === "pending" || o.status === "confirmed").length;
   const syncedCount = allOrders.filter((o) => o.status === "synced").length;
   const totalRevenue = allOrders.reduce((s, o) => s + o.totalPrice, 0);
+
+  const loadProducts = async () => {
+    setLoadingProducts(true);
+
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, sku, name, origin, roast_level, price_per_kg, is_active, synced_at")
+      .order("name", { ascending: true });
+
+    if (error) {
+      setSyncError(error.message);
+      setLoadingProducts(false);
+      return;
+    }
+
+    setProducts((data ?? []) as AdminProductRow[]);
+    setLoadingProducts(false);
+  };
+
+  useEffect(() => {
+    void loadProducts();
+  }, []);
+
+  const stats = useMemo(
+    () => [
+      { label: "To Fulfill", value: pendingCount, icon: Clock, color: "text-primary" },
+      { label: "Synced", value: syncedCount, icon: CheckCircle, color: "text-success" },
+      { label: "Total Orders", value: allOrders.length, icon: Package, color: "text-foreground" },
+      { label: "Revenue", value: `€${totalRevenue.toFixed(0)}`, icon: RefreshCw, color: "text-foreground" },
+    ],
+    [allOrders.length, pendingCount, syncedCount, totalRevenue],
+  );
 
   const handleSellsyProductSync = async () => {
     setSyncingProducts(true);
@@ -43,6 +87,8 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
         count: Number(data.syncedCount ?? 0),
         at: new Date().toISOString(),
       });
+
+      await loadProducts();
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : "Unknown Sellsy sync error");
     } finally {
@@ -80,12 +126,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-            {[
-              { label: "To Fulfill", value: pendingCount, icon: Clock, color: "text-primary" },
-              { label: "Synced", value: syncedCount, icon: CheckCircle, color: "text-success" },
-              { label: "Total Orders", value: allOrders.length, icon: Package, color: "text-foreground" },
-              { label: "Revenue", value: `€${totalRevenue.toFixed(0)}`, icon: RefreshCw, color: "text-foreground" },
-            ].map((stat) => (
+            {stats.map((stat) => (
               <div key={stat.label} className="bg-card border border-border rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <stat.icon className={`w-4 h-4 ${stat.color}`} />
@@ -180,7 +221,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
           </section>
 
           <section className="mt-8">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">Catalog ({MOCK_PRODUCTS.length} products)</h2>
+            <h2 className="text-sm font-medium text-muted-foreground mb-3">Catalog ({products.length} products)</h2>
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -194,15 +235,25 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                     </tr>
                   </thead>
                   <tbody>
-                    {MOCK_PRODUCTS.map((product) => (
-                      <tr key={product.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-mono text-muted-foreground">{product.sku}</td>
-                        <td className="px-4 py-3 font-medium text-foreground">{product.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{product.origin}</td>
-                        <td className="px-4 py-3 text-muted-foreground capitalize">{product.roastLevel}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-foreground">€{product.pricePerKg.toFixed(2)}</td>
+                    {loadingProducts ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-sm text-center text-muted-foreground">Loading catalog…</td>
                       </tr>
-                    ))}
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-sm text-center text-muted-foreground">No synced products yet.</td>
+                      </tr>
+                    ) : (
+                      products.map((product) => (
+                        <tr key={product.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 font-mono text-muted-foreground">{product.sku ?? "—"}</td>
+                          <td className="px-4 py-3 font-medium text-foreground">{product.name}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{product.origin ?? "—"}</td>
+                          <td className="px-4 py-3 text-muted-foreground capitalize">{product.roast_level ?? "—"}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-foreground">€{Number(product.price_per_kg).toFixed(2)}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

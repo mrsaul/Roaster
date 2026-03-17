@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useCart, MOCK_ORDERS, type Order } from "@/lib/store";
 import LoginPage from "./LoginPage";
 import CatalogPage from "./CatalogPage";
@@ -6,23 +6,63 @@ import CheckoutPage from "./CheckoutPage";
 import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
-type View = "login" | "catalog" | "checkout" | "orders" | "admin";
+type View = "catalog" | "checkout" | "orders" | "admin";
+type AppRole = "admin" | "user";
 
 const Index = () => {
-  const [view, setView] = useState<View>("login");
-  const [role, setRole] = useState<"client" | "admin">("client");
+  const [view, setView] = useState<View>("catalog");
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const cart = useCart();
 
-  const handleLogin = useCallback((r: "client" | "admin") => {
-    setRole(r);
-    setView(r === "admin" ? "admin" : "catalog");
+  const syncUserRole = useCallback(async () => {
+    const { data: ensuredRole, error: ensureError } = await supabase.rpc("ensure_current_user_role");
+
+    if (ensureError) {
+      throw ensureError;
+    }
+
+    const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
+    setRole(normalizedRole);
+    setView(normalizedRole === "admin" ? "admin" : "catalog");
   }, []);
 
-  const handleLogout = useCallback(() => {
-    setView("login");
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        setRole(null);
+        setAuthLoading(false);
+        cart.clearCart();
+        return;
+      }
+
+      setAuthLoading(true);
+      void syncUserRole().finally(() => setAuthLoading(false));
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user) {
+        setRole(null);
+        setAuthLoading(false);
+        return;
+      }
+
+      void syncUserRole().finally(() => setAuthLoading(false));
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [cart, syncUserRole]);
+
+  const handleLogout = useCallback(async () => {
     cart.clearCart();
+    await supabase.auth.signOut();
   }, [cart]);
 
   const handleConfirmOrder = useCallback((deliveryDate: string) => {
@@ -41,9 +81,19 @@ const Index = () => {
     setView("catalog");
   }, [cart, orders.length]);
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 text-sm text-muted-foreground">
+        Checking authentication…
+      </div>
+    );
+  }
+
+  if (!role) {
+    return <LoginPage />;
+  }
+
   switch (view) {
-    case "login":
-      return <LoginPage onLogin={handleLogin} />;
     case "catalog":
       return (
         <CatalogPage
