@@ -241,26 +241,42 @@ async function fetchSellsyProducts(accessToken: string) {
     return extractSellsyCollection(listRequest.payload.data);
   }
 
-  const searchRequest = await fetchSellsy("/v2/items/search", accessToken, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const searchPayloadCandidates: JsonRecord[] = [
+    {
+      filters: {},
     },
-    body: JSON.stringify({
-      pagination: {
-        page: 1,
-        per_page: 200,
-      },
-    }),
-  });
+    {
+      filters: {},
+      limit: 200,
+    },
+    {
+      filters: {},
+      page: 1,
+      limit: 200,
+    },
+  ];
 
-  if (!searchRequest.response.ok) {
-    throw new Error(
-      `Sellsy product fetch failed [${searchRequest.response.status}]: ${searchRequest.payload.text || listRequest.payload.text}`,
-    );
+  let lastSearchError: string | null = null;
+
+  for (const candidatePayload of searchPayloadCandidates) {
+    const searchRequest = await fetchSellsy("/v2/items/search", accessToken, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(candidatePayload),
+    });
+
+    if (searchRequest.response.ok) {
+      return extractSellsyCollection(searchRequest.payload.data);
+    }
+
+    lastSearchError = searchRequest.payload.text;
   }
 
-  return extractSellsyCollection(searchRequest.payload.data);
+  throw new Error(
+    `Sellsy product fetch failed: ${lastSearchError || listRequest.payload.text || "Unknown Sellsy search error"}`,
+  );
 }
 
 async function createSellsyOrder(accessToken: string, payload: JsonRecord) {
