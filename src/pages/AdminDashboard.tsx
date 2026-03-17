@@ -53,6 +53,23 @@ type AdminInvoiceRow = {
   issuedAt: string;
 };
 
+type ProductParseError = {
+  sellsy_id: string | null;
+  sku: string | null;
+  name: string | null;
+  message: string;
+  available_keys: string[];
+};
+
+type SyncRunRow = {
+  id: string;
+  status: string;
+  synced_count: number;
+  parse_errors: ProductParseError[] | null;
+  completed_at: string;
+  created_at: string;
+};
+
 interface AdminDashboardProps {
   orders: Order[];
   onLogout: () => void;
