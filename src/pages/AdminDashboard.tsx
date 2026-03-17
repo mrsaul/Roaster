@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck } from "lucide-react";
+import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck, Receipt, ExternalLink, Download, RefreshCw } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -41,10 +42,28 @@ type AdminProductRow = {
   synced_at: string;
 };
 
+type InvoiceStatus = "not-sent" | "sent" | "error" | "paid";
+
+type AdminInvoiceRow = {
+  id: string;
+  client: string;
+  sellsyId: string;
+  total: number;
+  status: InvoiceStatus;
+  issuedAt: string;
+};
+
 interface AdminDashboardProps {
   orders: Order[];
   onLogout: () => void;
 }
+
+const MOCK_INVOICES: AdminInvoiceRow[] = [
+  { id: "INV-203", client: "Café XYZ", sellsyId: "48392", total: 624.5, status: "not-sent", issuedAt: "2026-03-15" },
+  { id: "INV-202", client: "Atelier Nord", sellsyId: "48111", total: 488, status: "sent", issuedAt: "2026-03-14" },
+  { id: "INV-201", client: "Maison Aube", sellsyId: "47988", total: 712.2, status: "error", issuedAt: "2026-03-12" },
+  { id: "INV-200", client: "Café Lumière", sellsyId: "47803", total: 930.4, status: "paid", issuedAt: "2026-03-10" },
+];
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -78,8 +97,34 @@ function buildClientInsights(client: AdminClientRow | null) {
   };
 }
 
+function getInvoiceStatusLabel(status: InvoiceStatus) {
+  switch (status) {
+    case "not-sent":
+      return "Not sent";
+    case "sent":
+      return "Sent";
+    case "error":
+      return "Error";
+    case "paid":
+      return "Paid (synced back)";
+  }
+}
+
+function getInvoiceStatusClassName(status: InvoiceStatus) {
+  switch (status) {
+    case "not-sent":
+      return "bg-muted text-muted-foreground";
+    case "sent":
+      return "bg-primary/10 text-primary";
+    case "error":
+      return "bg-destructive/10 text-destructive";
+    case "paid":
+      return "bg-accent text-accent-foreground";
+  }
+}
+
 export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products">("clients");
+  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products" | "invoicing">("clients");
   const [clients, setClients] = useState<AdminClientRow[]>([]);
   const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
@@ -165,9 +210,25 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
     };
   }, [products]);
 
+  const invoiceSummary = useMemo(() => {
+    return {
+      notSent: MOCK_INVOICES.filter((invoice) => invoice.status === "not-sent").length,
+      sent: MOCK_INVOICES.filter((invoice) => invoice.status === "sent").length,
+      error: MOCK_INVOICES.filter((invoice) => invoice.status === "error").length,
+      paid: MOCK_INVOICES.filter((invoice) => invoice.status === "paid").length,
+    };
+  }, []);
+
   const insights = useMemo(() => buildClientInsights(selectedClient), [selectedClient]);
 
-  const sectionLabel = activeSection === "orders" ? "Orders" : activeSection === "products" ? "Products" : "Clients";
+  const sectionLabel =
+    activeSection === "orders"
+      ? "Orders"
+      : activeSection === "products"
+        ? "Products"
+        : activeSection === "invoicing"
+          ? "Invoicing"
+          : "Clients";
 
   return (
     <>
@@ -206,6 +267,16 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
               )}
             >
               <Coffee className="w-4 h-4" /> Products
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSection("invoicing")}
+              className={cn(
+                "ml-6 flex w-[calc(100%-1.5rem)] items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeSection === "invoicing" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              <Receipt className="w-4 h-4" /> Invoicing
             </button>
           </nav>
 
@@ -313,6 +384,80 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                             </tr>
                           ))
                         )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            ) : activeSection === "invoicing" ? (
+              <section>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Not sent</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.notSent}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Sent</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.sent}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Error</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.error}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Paid (synced back)</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.paid}</p>
+                  </div>
+                </div>
+
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/50">
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Invoice</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Issued</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {MOCK_INVOICES.map((invoice) => (
+                          <tr key={invoice.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="font-medium text-foreground">{invoice.id}</p>
+                                <p className="text-xs text-muted-foreground">Sellsy {invoice.sellsyId}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-foreground">{invoice.client}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{formatDate(invoice.issuedAt)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{invoice.total.toFixed(2)}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", getInvoiceStatusClassName(invoice.status))}>
+                                {getInvoiceStatusLabel(invoice.status)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <RefreshCw className="w-4 h-4" />
+                                  resend invoice
+                                </Button>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <ExternalLink className="w-4 h-4" />
+                                  open invoice in Sellsy
+                                </Button>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                  <Download className="w-4 h-4" />
+                                  download PDF
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
