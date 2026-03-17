@@ -26,8 +26,11 @@ interface CatalogPageProps {
     hydrateCart: (items: { product: Product; quantity: number }[]) => void;
   };
   usualOrderItems: { product: Product; quantity: number }[];
+  mode: "home" | "shop";
   onCheckout: () => void;
   onReorderLastOrder: () => void;
+  onGoHome: () => void;
+  onGoShop: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
 }
