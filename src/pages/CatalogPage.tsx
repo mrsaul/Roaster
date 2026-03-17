@@ -27,6 +27,7 @@ interface CatalogPageProps {
   };
   usualOrderItems: { product: Product; quantity: number }[];
   onCheckout: () => void;
+  onReorderLastOrder: () => void;
   onViewOrders: () => void;
   onLogout: () => void;
 }
@@ -69,7 +70,7 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-export default function CatalogPage({ cart, usualOrderItems, onCheckout, onViewOrders, onLogout }: CatalogPageProps) {
+export default function CatalogPage({ cart, usualOrderItems, onCheckout, onReorderLastOrder, onViewOrders, onLogout }: CatalogPageProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
@@ -192,14 +193,25 @@ export default function CatalogPage({ cart, usualOrderItems, onCheckout, onViewO
               <p className="text-sm text-muted-foreground">TOTAL</p>
               <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
             </div>
-            <Button
-              size="lg"
-              onClick={onCheckout}
-              disabled={!usualOrderHasItems}
-              className="w-full rounded-xl"
-            >
-              Confirm Order
-            </Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={onReorderLastOrder}
+                disabled={!usualOrderHasItems}
+                className="w-full rounded-xl"
+              >
+                Reorder last order
+              </Button>
+              <Button
+                size="lg"
+                onClick={onCheckout}
+                disabled={!usualOrderHasItems}
+                className="w-full rounded-xl"
+              >
+                Confirm Order
+              </Button>
+            </div>
           </div>
         </section>
 

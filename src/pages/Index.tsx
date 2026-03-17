@@ -234,6 +234,7 @@ const Index = () => {
           cart={cart}
           usualOrderItems={usualOrderItems}
           onCheckout={() => setView("checkout")}
+          onReorderLastOrder={() => setView("checkout")}
           onViewOrders={() => setView("orders")}
           onLogout={handleLogout}
         />
