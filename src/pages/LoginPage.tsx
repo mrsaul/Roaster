@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 
-type AuthMode = "sign-in" | "sign-up";
+type AuthMode = "sign-in" | "sign-up" | "forgot-password";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const isPasswordRequired = mode !== "forgot-password";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -21,6 +23,19 @@ export default function LoginPage() {
     setMessage(null);
 
     try {
+      if (mode === "forgot-password") {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (resetError) {
+          throw resetError;
+        }
+
+        setMessage("Password reset email sent. Check your inbox.");
+        return;
+      }
+
       if (mode === "sign-up") {
         const { error: signUpError } = await supabase.auth.signUp({
           email,
@@ -67,7 +82,11 @@ export default function LoginPage() {
         <div className="mb-8">
           <h1 className="text-xl font-medium tracking-tight text-foreground">PluralRoaster</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {mode === "sign-in" ? "Sign in to manage orders." : "Create your account to access the catalog."}
+            {mode === "sign-in"
+              ? "Sign in to manage orders."
+              : mode === "sign-up"
+                ? "Create your account to access the catalog."
+                : "Enter your email to receive a reset link."}
           </p>
         </div>
 
@@ -85,19 +104,21 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm text-foreground">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              minLength={8}
-              required
-              className="h-11"
-            />
-          </div>
+          {isPasswordRequired ? (
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm text-foreground">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                minLength={8}
+                required={isPasswordRequired}
+                className="h-11"
+              />
+            </div>
+          ) : null}
 
           {error ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -117,20 +138,57 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full h-11 bg-primary text-primary-foreground text-sm font-medium rounded-lg transition-opacity duration-150 disabled:opacity-50"
           >
-            {loading ? (mode === "sign-in" ? "Signing in…" : "Creating account…") : mode === "sign-in" ? "Sign In" : "Create Account"}
+            {loading
+              ? mode === "sign-in"
+                ? "Signing in…"
+                : mode === "sign-up"
+                  ? "Creating account…"
+                  : "Sending reset link…"
+              : mode === "sign-in"
+                ? "Sign In"
+                : mode === "sign-up"
+                  ? "Create Account"
+                  : "Send Reset Link"}
           </motion.button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMode((current) => (current === "sign-in" ? "sign-up" : "sign-in"));
-              setError(null);
-              setMessage(null);
-            }}
-            className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {mode === "sign-in" ? "Need an account? Create one" : "Already have an account? Sign in"}
-          </button>
+          {mode === "sign-in" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("forgot-password");
+                  setError(null);
+                  setMessage(null);
+                }}
+                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("sign-up");
+                  setError(null);
+                  setMessage(null);
+                }}
+                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Need an account? Create one
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setMode("sign-in");
+                setError(null);
+                setMessage(null);
+              }}
+              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Back to sign in
+            </button>
+          )}
 
           <p className="text-xs text-muted-foreground text-center mt-4">
             The account for contact@pluralcafe.fr is promoted to admin automatically after sign-in.
