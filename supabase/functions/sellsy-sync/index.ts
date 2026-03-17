@@ -247,6 +247,7 @@ async function fetchSellsyProducts(accessToken: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      filters: {},
       pagination: {
         page: 1,
         per_page: 200,
