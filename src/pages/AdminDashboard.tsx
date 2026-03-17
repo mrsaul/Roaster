@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -146,11 +147,13 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
   const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [runningProductSync, setRunningProductSync] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
   const [productError, setProductError] = useState<string | null>(null);
   const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   const [syncRunError, setSyncRunError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
+  const { toast } = useToast();
 
   const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
 
@@ -221,6 +224,44 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
       setSyncRun((data as SyncRunRow | null) ?? null);
     } catch (error) {
       setSyncRunError(error instanceof Error ? error.message : "Unknown sync status error");
+    }
+  };
+
+  const runProductSync = async () => {
+    setRunningProductSync(true);
+    setProductError(null);
+    setSyncRunError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "sync-products" },
+      });
+
+      if (error) {
+        throw new Error(error.message || "Sellsy product sync failed");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Unable to sync products from Sellsy");
+      }
+
+      await Promise.all([loadProducts(), loadLatestProductSync()]);
+
+      toast({
+        title: "Product sync completed",
+        description: `${data.syncedCount ?? 0} product${data.syncedCount === 1 ? "" : "s"} refreshed from Sellsy.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown Sellsy sync error";
+      setProductError(message);
+      setSyncRunError(message);
+      toast({
+        title: "Product sync failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setRunningProductSync(false);
     }
   };
 
