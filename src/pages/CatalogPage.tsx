@@ -177,17 +177,19 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
             <p className="text-xs text-muted-foreground">{mode === "home" ? "Your latest order" : "Full catalog"}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void loadProducts()}
-              disabled={loadingProducts}
-              className="rounded-full"
-            >
-              <RefreshCw className={loadingProducts ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              Refresh
-            </Button>
+            {mode === "shop" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadProducts()}
+                disabled={loadingProducts}
+                className="rounded-full"
+              >
+                <RefreshCw className={loadingProducts ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                Refresh
+              </Button>
+            ) : null}
             <button onClick={onLogout} className="p-2 rounded-full border border-border bg-card/80 shadow-sm transition-colors hover:bg-muted" aria-label="Logout">
               <LogOut className="w-5 h-5 text-muted-foreground" />
             </button>
@@ -262,68 +264,70 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
         ) : null}
 
         {mode === "shop" ? (
-          <motion.div
-            className="flex flex-col gap-2"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: { transition: { staggerChildren: 0.05 } },
-            }}
-          >
-            {visibleProducts.map((product) => (
-              <motion.div
-                key={product.id}
-                variants={{
-                  hidden: { opacity: 0, y: 10 },
-                  visible: { opacity: 1, y: 0 },
-                }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="rounded-xl border border-border bg-card p-4">
-                  <p className="text-base font-medium text-foreground">{product.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{product.origin}</p>
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium tabular-nums text-foreground">€{product.pricePerKg.toFixed(2)}/kg</span>
-                    <QuantityStepper
-                      value={cart.getQuantity(product.id)}
-                      onChange={(qty) => cart.updateQuantity(product, qty)}
-                    />
+          <>
+            <motion.div
+              className="flex flex-col gap-2"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                visible: { transition: { staggerChildren: 0.05 } },
+              }}
+            >
+              {visibleProducts.map((product) => (
+                <motion.div
+                  key={product.id}
+                  variants={{
+                    hidden: { opacity: 0, y: 10 },
+                    visible: { opacity: 1, y: 0 },
+                  }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <p className="text-base font-medium text-foreground">{product.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{product.origin}</p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium tabular-nums text-foreground">€{product.pricePerKg.toFixed(2)}/kg</span>
+                      <QuantityStepper
+                        value={cart.getQuantity(product.id)}
+                        onChange={(qty) => cart.updateQuantity(product, qty)}
+                      />
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : null}
+                </motion.div>
+              ))}
+            </motion.div>
 
-        {loadingProducts ? (
-          <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-            Loading coffee catalog…
-          </div>
-        ) : null}
-
-        {!loadingProducts && productsError ? (
-          <div className="rounded-lg border border-border bg-card px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">Couldn’t load the synced catalog.</p>
-                <p className="mt-1 text-xs text-muted-foreground">Showing the default product list for now.</p>
+            {loadingProducts ? (
+              <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+                Loading coffee catalog…
               </div>
-              <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
-                Retry
-              </Button>
-            </div>
-          </div>
-        ) : null}
+            ) : null}
 
-        {!loadingProducts && !productsError && visibleProducts.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-            <div className="flex items-center justify-between gap-3">
-              <span>No synced products yet. Ask an admin to run the Sellsy sync.</span>
-              <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
-                Refresh
-              </Button>
-            </div>
-          </div>
+            {!loadingProducts && productsError ? (
+              <div className="rounded-lg border border-border bg-card px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Couldn’t load the synced catalog.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Showing the default product list for now.</p>
+                  </div>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {!loadingProducts && !productsError && visibleProducts.length === 0 ? (
+              <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-3">
+                  <span>No synced products yet. Ask an admin to run the Sellsy sync.</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </main>
 
