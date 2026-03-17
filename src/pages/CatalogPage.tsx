@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CartBar } from "@/components/CartBar";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
@@ -6,7 +6,7 @@ import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { MOCK_PRODUCTS, type Product } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
-import { LogOut, ClipboardList, House, ShoppingBag } from "lucide-react";
+import { LogOut, ClipboardList, House, ShoppingBag, RefreshCw } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { addDays, format, isWeekend, startOfDay } from "date-fns";
 
@@ -82,39 +82,31 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
   const initializedUsualOrder = useRef(false);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadProducts = useCallback(async () => {
+    setLoadingProducts(true);
+    setProductsError(null);
 
-    const loadProducts = async () => {
-      setLoadingProducts(true);
-      setProductsError(null);
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, sellsy_id, sku, name, origin, roast_level, price_per_kg, is_active")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
 
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, sellsy_id, sku, name, origin, roast_level, price_per_kg, is_active")
-        .eq("is_active", true)
-        .order("name", { ascending: true });
-
-      if (!mounted) return;
-
-      if (error) {
-        setProductsError(error.message);
-        setProducts(MOCK_PRODUCTS.filter((product) => product.available));
-        setLoadingProducts(false);
-        return;
-      }
-
-      const remoteProducts = (data ?? []).map(mapProductRow);
-      setProducts(remoteProducts.length > 0 ? remoteProducts : []);
+    if (error) {
+      setProductsError(error.message);
+      setProducts(MOCK_PRODUCTS.filter((product) => product.available));
       setLoadingProducts(false);
-    };
+      return;
+    }
 
-    void loadProducts();
-
-    return () => {
-      mounted = false;
-    };
+    const remoteProducts = (data ?? []).map(mapProductRow);
+    setProducts(remoteProducts.length > 0 ? remoteProducts : []);
+    setLoadingProducts(false);
   }, []);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
 
   const visibleProducts = useMemo(() => products.filter((product) => product.available), [products]);
 
@@ -149,14 +141,27 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
           <div>
             <h1 className="text-base font-medium tracking-tight text-foreground">PluralRoaster</h1>
             <p className="text-xs text-muted-foreground">{mode === "home" ? "Your latest order" : "Full catalog"}</p>
           </div>
-          <button onClick={onLogout} className="p-2 rounded-full border border-border bg-card/80 shadow-sm transition-colors hover:bg-muted" aria-label="Logout">
-            <LogOut className="w-5 h-5 text-muted-foreground" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void loadProducts()}
+              disabled={loadingProducts}
+              className="rounded-full"
+            >
+              <RefreshCw className={loadingProducts ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Refresh
+            </Button>
+            <button onClick={onLogout} className="p-2 rounded-full border border-border bg-card/80 shadow-sm transition-colors hover:bg-muted" aria-label="Logout">
+              <LogOut className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -268,14 +273,26 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
 
         {!loadingProducts && productsError ? (
           <div className="rounded-lg border border-border bg-card px-4 py-3">
-            <p className="text-sm font-medium text-foreground">Couldn’t load the synced catalog.</p>
-            <p className="mt-1 text-xs text-muted-foreground">Showing the default product list for now.</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Couldn’t load the synced catalog.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Showing the default product list for now.</p>
+              </div>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
+                Retry
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {!loadingProducts && !productsError && visibleProducts.length === 0 ? (
           <div className="rounded-lg border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-            No synced products yet. Ask an admin to run the Sellsy sync.
+            <div className="flex items-center justify-between gap-3">
+              <span>No synced products yet. Ask an admin to run the Sellsy sync.</span>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
+                Refresh
+              </Button>
+            </div>
           </div>
         ) : null}
       </main>
@@ -308,3 +325,4 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
     </div>
   );
 }
+
