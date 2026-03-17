@@ -167,7 +167,7 @@ export default function CatalogPage({ cart, usualOrderItems, onCheckout, onViewO
           </div>
 
           <div className="space-y-4">
-            {usualOrderProducts.map(({ product }) => (
+            {resolvedUsualOrderItems.map(({ product }) => (
               <div key={product.id} className="space-y-2">
                 <p className="text-base font-medium text-foreground">{product.name}</p>
                 <QuantityStepper

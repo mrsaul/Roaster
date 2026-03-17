@@ -80,6 +80,10 @@ export function useCart() {
     });
   }, []);
 
+  const hydrateCart = useCallback((cartItems: CartItem[]) => {
+    setItems(new Map(cartItems.map((item) => [item.product.id, item])));
+  }, []);
+
   const getQuantity = useCallback((productId: string) => {
     return items.get(productId)?.quantity ?? 0;
   }, [items]);
@@ -92,5 +96,5 @@ export function useCart() {
   const totalKg = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cartItems.reduce((sum, item) => sum + item.quantity * item.product.pricePerKg, 0);
 
-  return { items: cartItems, updateQuantity, getQuantity, clearCart, totalKg, totalPrice };
+  return { items: cartItems, updateQuantity, hydrateCart, getQuantity, clearCart, totalKg, totalPrice };
 }
