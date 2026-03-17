@@ -29,17 +29,9 @@ export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrd
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
         <div className="max-w-lg mx-auto space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-base font-medium text-foreground">Orders</h1>
-              <p className="text-xs text-muted-foreground">Track active and placed orders</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
-            <button onClick={onGoHome} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Home</button>
-            <button onClick={onGoShop} className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Shop</button>
-            <button onClick={onViewOrders} className="rounded-lg bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm">Orders</button>
+          <div>
+            <h1 className="text-base font-medium text-foreground">Orders</h1>
+            <p className="text-xs text-muted-foreground">Track active and placed orders</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
@@ -65,7 +57,7 @@ export default function OrderHistoryPage({ orders, onGoHome, onGoShop, onViewOrd
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4">
+      <main className="max-w-lg mx-auto px-4 py-4 pb-32">
         <motion.div
           className="space-y-3"
           initial="hidden"
