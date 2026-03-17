@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import type { Order } from "@/lib/store";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -11,12 +12,24 @@ interface OrderHistoryPageProps {
   draftItems: Order["items"];
   draftTotalKg: number;
   draftTotalPrice: number;
+  draftDeliveryDate: string | null;
+  onDraftDeliveryDateChange: (date: string) => void;
   onGoHome: () => void;
   onGoShop: () => void;
   onViewOrders: () => void;
 }
 
-export default function OrderHistoryPage({ orders, draftItems, draftTotalKg, draftTotalPrice, onGoHome, onGoShop, onViewOrders }: OrderHistoryPageProps) {
+export default function OrderHistoryPage({
+  orders,
+  draftItems,
+  draftTotalKg,
+  draftTotalPrice,
+  draftDeliveryDate,
+  onDraftDeliveryDateChange,
+  onGoHome,
+  onGoShop,
+  onViewOrders,
+}: OrderHistoryPageProps) {
   const [activeTab, setActiveTab] = useState<"in-progress" | "order-placed">("in-progress");
 
   const draftOrder: Order | null = draftItems.length > 0
@@ -25,7 +38,7 @@ export default function OrderHistoryPage({ orders, draftItems, draftTotalKg, dra
         items: draftItems,
         totalKg: draftTotalKg,
         totalPrice: draftTotalPrice,
-        deliveryDate: new Date().toISOString(),
+        deliveryDate: draftDeliveryDate ?? new Date().toISOString(),
         status: "pending",
         createdAt: new Date().toISOString(),
       }
@@ -96,8 +109,13 @@ export default function OrderHistoryPage({ orders, draftItems, draftTotalKg, dra
                   isDraft ? "bg-secondary/40 border-primary/30" : "bg-card border-border"
                 )}
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm text-foreground">{order.id}</span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="font-mono text-sm text-foreground">{order.id}</span>
+                    {isDraft ? (
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Editable draft</p>
+                    ) : null}
+                  </div>
                   <StatusBadge status={order.status} sellsyId={order.sellsyId} />
                 </div>
                 <div className="flex items-center justify-between text-sm">
@@ -108,6 +126,19 @@ export default function OrderHistoryPage({ orders, draftItems, draftTotalKg, dra
                     {order.totalKg.toFixed(1)} kg · €{order.totalPrice.toFixed(2)}
                   </span>
                 </div>
+
+                {isDraft ? (
+                  <div className="rounded-xl border border-border bg-background/80 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-foreground">Delivery date</span>
+                      <span className="text-xs text-muted-foreground">
+                        {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Select a weekday"}
+                      </span>
+                    </div>
+                    <DeliveryDatePicker selected={draftDeliveryDate} onSelect={onDraftDeliveryDateChange} />
+                  </div>
+                ) : null}
+
                 <div className="text-xs text-muted-foreground">
                   {order.items.map((item) => (
                     <span key={item.product.id} className="inline-block mr-3">

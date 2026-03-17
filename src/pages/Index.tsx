@@ -71,6 +71,7 @@ const Index = () => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
 
@@ -218,6 +219,7 @@ const Index = () => {
     }
 
     await loadOrders();
+    setDraftDeliveryDate(null);
     cart.clearCart();
     setView("home");
   }, [cart, loadOrders]);
@@ -289,6 +291,8 @@ const Index = () => {
           draftItems={cart.items}
           draftTotalKg={cart.totalKg}
           draftTotalPrice={cart.totalPrice}
+          draftDeliveryDate={draftDeliveryDate}
+          onDraftDeliveryDateChange={setDraftDeliveryDate}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
