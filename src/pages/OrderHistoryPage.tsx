@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { Order } from "@/lib/store";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { ClipboardList, House, ShoppingBag } from "lucide-react";
 
 interface OrderHistoryPageProps {
   orders: Order[];

@@ -6,7 +6,7 @@ import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { MOCK_PRODUCTS, type Product } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
-import { LogOut, ClipboardList } from "lucide-react";
+import { LogOut, ClipboardList, House, ShoppingBag } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { addDays, format, isWeekend, startOfDay } from "date-fns";
 
