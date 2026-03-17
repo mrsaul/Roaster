@@ -107,11 +107,30 @@ function getServiceSupabaseClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function getSellsyAccessToken() {
+function getSellsyApiBaseUrl() {
+  const fallbackUrl = "https://api.sellsy.com";
+
   if (!SELLSY_API_BASE_URL) {
-    throw new Error("SELLSY_API_BASE_URL is not configured");
+    return fallbackUrl;
   }
 
+  try {
+    const parsedUrl = new URL(SELLSY_API_BASE_URL);
+    const hostname = parsedUrl.hostname.toLowerCase();
+
+    if (hostname === "api.sellsy.com" || hostname.endsWith(".sellsy.com")) {
+      return `${parsedUrl.origin}${parsedUrl.pathname === "/" ? "" : parsedUrl.pathname}`;
+    }
+  } catch {
+    console.warn("Invalid SELLSY_API_BASE_URL secret, falling back to Sellsy API default");
+    return fallbackUrl;
+  }
+
+  console.warn("SELSY_API_BASE_URL does not target the Sellsy API, falling back to https://api.sellsy.com");
+  return fallbackUrl;
+}
+
+async function getSellsyAccessToken() {
   if (!SELLSY_CLIENT_ID) {
     throw new Error("SELLSY_CLIENT_ID is not configured");
   }
@@ -147,7 +166,7 @@ async function getSellsyAccessToken() {
 }
 
 async function createSellsyOrder(accessToken: string, payload: Record<string, unknown>) {
-  const endpoint = new URL("/v2/orders", SELLSY_API_BASE_URL ?? "https://api.sellsy.com").toString();
+  const endpoint = new URL("/v2/orders", getSellsyApiBaseUrl()).toString();
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
