@@ -121,7 +121,7 @@ const Index = () => {
         />
       );
     case "admin":
-      return <AdminDashboard orders={orders} onLogout={handleLogout} />;
+      return <AdminDashboard onLogout={handleLogout} />;
     default:
       return null;
   }
