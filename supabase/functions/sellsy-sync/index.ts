@@ -631,6 +631,31 @@ async function syncProductsToDatabase(rows: ProductRow[]) {
   }
 }
 
+async function logSyncRun(params: {
+  userId: string;
+  status: string;
+  syncedCount: number;
+  parseErrors: ProductParseError[];
+  startedAt: string;
+  completedAt: string;
+}) {
+  const supabase = createServiceSupabaseClient();
+  const { error } = await supabase.from("sync_runs").insert({
+    source: "sellsy",
+    sync_type: "products",
+    status: params.status,
+    synced_count: params.syncedCount,
+    parse_errors: params.parseErrors,
+    started_at: params.startedAt,
+    completed_at: params.completedAt,
+    created_by: params.userId,
+  });
+
+  if (error) {
+    console.error("Failed to log sync run:", error.message);
+  }
+}
+
 function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): JsonRecord {
   const items = Array.isArray(body.items) ? (body.items as SellsyOrderLine[]) : [];
 
@@ -663,16 +688,41 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
 }
 
 async function handleProductSync(user: AuthenticatedUser, accessToken: string) {
-  const sellsyProducts = await fetchSellsyProducts(accessToken);
-  const normalizedProducts = normalizeProducts(sellsyProducts);
-  await syncProductsToDatabase(normalizedProducts);
+  const startedAt = new Date().toISOString();
 
-  return jsonResponse({
-    success: true,
-    mode: "sync-products",
-    syncedCount: normalizedProducts.length,
-    requestedBy: user.userId,
-  });
+  try {
+    const sellsyProducts = await fetchSellsyProducts(accessToken);
+    const { rows, parseErrors } = normalizeProducts(sellsyProducts);
+    await syncProductsToDatabase(rows);
+    const completedAt = new Date().toISOString();
+    await logSyncRun({
+      userId: user.userId,
+      status: parseErrors.length > 0 ? "warning" : "success",
+      syncedCount: rows.length,
+      parseErrors,
+      startedAt,
+      completedAt,
+    });
+
+    return jsonResponse({
+      success: true,
+      mode: "sync-products",
+      syncedCount: rows.length,
+      parseErrors,
+      requestedBy: user.userId,
+    });
+  } catch (error) {
+    const completedAt = new Date().toISOString();
+    await logSyncRun({
+      userId: user.userId,
+      status: "error",
+      syncedCount: 0,
+      parseErrors: [],
+      startedAt,
+      completedAt,
+    });
+    throw error;
+  }
 }
 
 async function handleClientList(user: AuthenticatedUser, accessToken: string) {

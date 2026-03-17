@@ -367,7 +367,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
               </>
             ) : activeSection === "products" ? (
               <section>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-2">Sellsy products</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.totalProducts}</p>
@@ -380,6 +380,92 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                     <p className="text-xs text-muted-foreground mb-2">Average €/kg</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">€{productSummary.averagePrice.toFixed(2)}</p>
                   </div>
+                </div>
+
+                <div className="mb-8 rounded-lg border border-border bg-card p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <BadgeEuro className="h-4 w-4 text-muted-foreground" />
+                        <h2 className="text-sm font-medium text-foreground">Product sync status</h2>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Latest Sellsy product import, synced count, and any price parsing issues.
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-2 self-start" onClick={() => void loadLatestProductSync()}>
+                      <RefreshCw className="h-4 w-4" />
+                      refresh status
+                    </Button>
+                  </div>
+
+                  {syncRunError ? (
+                    <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+                      <p className="text-sm font-medium text-foreground">Sync status fetch failed</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{syncRunError}</p>
+                    </div>
+                  ) : syncRun ? (
+                    <>
+                      <div className="mt-4 grid gap-3 md:grid-cols-3">
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">Last sync</p>
+                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                            <Clock3 className="h-4 w-4 text-muted-foreground" />
+                            {latestSyncTimestamp ? formatDate(latestSyncTimestamp) : "—"}
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {latestSyncTimestamp ? `${formatDistanceToNow(parseISO(latestSyncTimestamp), { addSuffix: true })}` : "No run recorded"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">Synced items</p>
+                          <p className="mt-2 text-2xl font-medium tabular-nums text-foreground">{syncRun.synced_count}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/40 p-3">
+                          <p className="text-xs text-muted-foreground">Result</p>
+                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                            {syncRun.status === "success" ? (
+                              <CheckCircle2 className="h-4 w-4 text-success" />
+                            ) : syncRun.status === "warning" ? (
+                              <AlertCircle className="h-4 w-4 text-primary" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4 text-destructive" />
+                            )}
+                            {syncRun.status}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 rounded-lg border border-border overflow-hidden">
+                        <div className="border-b border-border bg-muted/40 px-4 py-3">
+                          <p className="text-sm font-medium text-foreground">Pricing parse errors</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {latestParseErrors.length > 0
+                              ? `${latestParseErrors.length} product price field${latestParseErrors.length > 1 ? "s" : ""} could not be parsed in the last sync.`
+                              : "No pricing parse errors were recorded in the last sync."}
+                          </p>
+                        </div>
+                        {latestParseErrors.length > 0 ? (
+                          <div className="divide-y divide-border">
+                            {latestParseErrors.map((error, index) => (
+                              <div key={`${error.sellsy_id ?? error.sku ?? "parse-error"}-${index}`} className="px-4 py-3">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="text-sm font-medium text-foreground">{error.name ?? error.sku ?? error.sellsy_id ?? "Unknown product"}</p>
+                                  <p className="text-xs text-muted-foreground">Sellsy {error.sellsy_id ?? "—"}</p>
+                                </div>
+                                <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Available fields: {error.available_keys.join(", ") || "—"}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-4 rounded-lg bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
+                      No product sync run has been logged yet.
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-card border border-border rounded-lg overflow-hidden">
