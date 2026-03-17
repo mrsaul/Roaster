@@ -395,6 +395,69 @@ async function fetchSellsyProducts(accessToken: string) {
   );
 }
 
+async function fetchSellsyClients(accessToken: string) {
+  const endpointCandidates = [
+    { path: "/v2/companies?limit=200", method: "GET" as const },
+    { path: "/v2/contacts?limit=200", method: "GET" as const },
+  ];
+
+  const searchPayloadCandidates: JsonRecord[] = [
+    { filters: {} },
+    { filters: {}, limit: 200 },
+    { filters: {}, page: 1, limit: 200 },
+  ];
+
+  let lastError: string | null = null;
+
+  for (const candidate of endpointCandidates) {
+    const listRequest = await fetchSellsy(candidate.path, accessToken, {
+      method: candidate.method,
+    });
+
+    if (listRequest.response.ok) {
+      return extractSellsyCollection(listRequest.payload.data);
+    }
+
+    lastError = listRequest.payload.text;
+
+    const searchPath = `${candidate.path.replace(/\?.*$/, "")}/search`;
+
+    for (const searchPayload of searchPayloadCandidates) {
+      const searchRequest = await fetchSellsy(searchPath, accessToken, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(searchPayload),
+      });
+
+      if (searchRequest.response.ok) {
+        return extractSellsyCollection(searchRequest.payload.data);
+      }
+
+      lastError = searchRequest.payload.text;
+    }
+  }
+
+  throw new Error(`Sellsy client fetch failed: ${lastError || "Unknown Sellsy client error"}`);
+}
+
+async function createSellsyOrder(accessToken: string, payload: JsonRecord) {
+  const request = await fetchSellsy("/v2/orders", accessToken, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!request.response.ok) {
+    throw new Error(`Sellsy order creation failed [${request.response.status}]: ${request.payload.text}`);
+  }
+
+  return request.payload.data;
+}
+
 function inferRoastLevel(product: JsonRecord, description: string | null) {
   const fullText = `${String(product.name ?? "")} ${description ?? ""}`.toLowerCase();
 
