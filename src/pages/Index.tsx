@@ -7,7 +7,7 @@ import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "catalog" | "checkout" | "orders" | "admin";
+type View = "home" | "shop" | "checkout" | "orders" | "admin";
 type AppRole = "admin" | "user";
 
 type PersistedOrderRow = {
