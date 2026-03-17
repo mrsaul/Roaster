@@ -119,7 +119,7 @@ const Index = () => {
 
     const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
     setRole(normalizedRole);
-    setView(normalizedRole === "admin" ? "admin" : "catalog");
+    setView(normalizedRole === "admin" ? "admin" : "home");
 
     if (normalizedRole === "user") {
       await loadOrders();
