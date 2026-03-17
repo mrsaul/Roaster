@@ -231,13 +231,44 @@ function pickString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function pickNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : null;
+function parseLocalizedNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
-  return null;
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  let normalized = value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  normalized = normalized
+    .replace(/[€$£¥₣\s]/g, "")
+    .replace(/[^0-9,.-]/g, "");
+
+  if (!normalized) {
+    return null;
+  }
+
+  const lastComma = normalized.lastIndexOf(",");
+  const lastDot = normalized.lastIndexOf(".");
+
+  if (lastComma > lastDot) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalized = normalized.replace(/,/g, "");
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pickNumber(value: unknown): number | null {
+  return parseLocalizedNumber(value);
 }
 
 function pickFirstString(...values: unknown[]) {
@@ -264,6 +295,27 @@ function pickNestedString(record: JsonRecord, paths: string[][]) {
 
     const picked = pickString(current);
     if (picked) return picked;
+  }
+
+  return null;
+}
+
+function pickNestedValue(record: JsonRecord, paths: string[][]) {
+  for (const path of paths) {
+    let current: unknown = record;
+
+    for (const key of path) {
+      if (!current || typeof current !== "object") {
+        current = null;
+        break;
+      }
+
+      current = (current as JsonRecord)[key];
+    }
+
+    if (current !== undefined && current !== null && current !== "") {
+      return current;
+    }
   }
 
   return null;
@@ -343,69 +395,6 @@ async function fetchSellsyProducts(accessToken: string) {
   );
 }
 
-async function fetchSellsyClients(accessToken: string) {
-  const endpointCandidates = [
-    { path: "/v2/companies?limit=200", method: "GET" as const },
-    { path: "/v2/contacts?limit=200", method: "GET" as const },
-  ];
-
-  const searchPayloadCandidates: JsonRecord[] = [
-    { filters: {} },
-    { filters: {}, limit: 200 },
-    { filters: {}, page: 1, limit: 200 },
-  ];
-
-  let lastError: string | null = null;
-
-  for (const candidate of endpointCandidates) {
-    const listRequest = await fetchSellsy(candidate.path, accessToken, {
-      method: candidate.method,
-    });
-
-    if (listRequest.response.ok) {
-      return extractSellsyCollection(listRequest.payload.data);
-    }
-
-    lastError = listRequest.payload.text;
-
-    const searchPath = `${candidate.path.replace(/\?.*$/, "")}/search`;
-
-    for (const searchPayload of searchPayloadCandidates) {
-      const searchRequest = await fetchSellsy(searchPath, accessToken, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(searchPayload),
-      });
-
-      if (searchRequest.response.ok) {
-        return extractSellsyCollection(searchRequest.payload.data);
-      }
-
-      lastError = searchRequest.payload.text;
-    }
-  }
-
-  throw new Error(`Sellsy client fetch failed: ${lastError || "Unknown Sellsy client error"}`);
-}
-
-async function createSellsyOrder(accessToken: string, payload: JsonRecord) {
-  const request = await fetchSellsy("/v2/orders", accessToken, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!request.response.ok) {
-    throw new Error(`Sellsy order creation failed [${request.response.status}]: ${request.payload.text}`);
-  }
-
-  return request.payload.data;
-}
-
 function inferRoastLevel(product: JsonRecord, description: string | null) {
   const fullText = `${String(product.name ?? "")} ${description ?? ""}`.toLowerCase();
 
@@ -426,11 +415,43 @@ function isCoffeeProduct(product: JsonRecord) {
   return Boolean(rawName) && /(coffee|café|roast|espresso|blend|arabica|robusta)/.test(text);
 }
 
+function extractProductPrice(product: JsonRecord) {
+  const candidateValues: unknown[] = [
+    product.price,
+    product.price_per_kg,
+    product.unit_price,
+    product.unit_amount,
+    product.amount,
+    product.price_tax_exc,
+    product.price_tax_inc,
+    product.price_ht,
+    product.price_ttc,
+    product.buying_price,
+    product.selling_price,
+    product.public_price,
+    pickNestedValue(product, [["prices", "unit_amount"], ["prices", "price"], ["prices", "amount"], ["prices", "price_tax_exc"]]),
+    pickNestedValue(product, [["formatted_prices", "unit_amount"], ["formatted_prices", "price"], ["formatted_prices", "amount"]]),
+  ];
+
+  for (const candidate of candidateValues) {
+    const parsed = parseLocalizedNumber(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  console.warn("Unable to parse Sellsy product price", {
+    sellsyId: product.id ?? product.sellsy_id ?? null,
+    sku: product.sku ?? product.reference ?? null,
+    availableKeys: Object.keys(product),
+  });
+
+  return 0;
+}
+
 function normalizeProduct(product: JsonRecord): ProductRow {
   const sellsyId = String(product.id ?? product.sellsy_id ?? product.reference ?? crypto.randomUUID());
   const description = typeof product.description === "string" ? product.description : null;
-  const priceSource = product.price ?? product.unit_amount ?? product.amount ?? product.price_tax_exc ?? 0;
-  const numericPrice = Number(priceSource);
 
   return {
     sellsy_id: sellsyId,
@@ -439,7 +460,7 @@ function normalizeProduct(product: JsonRecord): ProductRow {
     description,
     origin: product.origin ? String(product.origin) : null,
     roast_level: inferRoastLevel(product, description),
-    price_per_kg: Number.isFinite(numericPrice) ? numericPrice : 0,
+    price_per_kg: extractProductPrice(product),
     is_active: product.is_active === false ? false : product.active === false ? false : true,
     synced_at: new Date().toISOString(),
   };
