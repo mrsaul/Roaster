@@ -187,11 +187,40 @@ async function createSellsyOrder(accessToken: string, payload: Record<string, un
   return data;
 }
 
-async function fetchSellsyProducts(accessToken: string) {
-  const endpoint = new URL("/v2/products", getSellsyApiBaseUrl());
-  endpoint.searchParams.set("limit", "200");
+async function parseSellsyJsonResponse(response: Response) {
+  const text = await response.text();
+  return {
+    text,
+    data: text ? JSON.parse(text) : {},
+  };
+}
 
-  const response = await fetch(endpoint.toString(), {
+function extractSellsyCollection(data: unknown) {
+  if (Array.isArray(data)) {
+    return data as Record<string, unknown>[];
+  }
+
+  if (data && typeof data === "object") {
+    const objectData = data as Record<string, unknown>;
+
+    if (Array.isArray(objectData.data)) {
+      return objectData.data as Record<string, unknown>[];
+    }
+
+    if (Array.isArray(objectData.items)) {
+      return objectData.items as Record<string, unknown>[];
+    }
+  }
+
+  return [];
+}
+
+async function fetchSellsyProducts(accessToken: string) {
+  const baseUrl = getSellsyApiBaseUrl();
+  const listEndpoint = new URL("/v2/items", baseUrl);
+  listEndpoint.searchParams.set("limit", "200");
+
+  const listResponse = await fetch(listEndpoint.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -199,22 +228,37 @@ async function fetchSellsyProducts(accessToken: string) {
     },
   });
 
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
+  const listPayload = await parseSellsyJsonResponse(listResponse);
 
-  if (!response.ok) {
-    throw new Error(`Sellsy product fetch failed [${response.status}]: ${text}`);
+  if (listResponse.ok) {
+    return extractSellsyCollection(listPayload.data);
   }
 
-  const products = Array.isArray(data)
-    ? data
-    : Array.isArray(data.data)
-      ? data.data
-      : Array.isArray(data.items)
-        ? data.items
-        : [];
+  const searchEndpoint = new URL("/v2/items/search", baseUrl);
+  const searchResponse = await fetch(searchEndpoint.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      pagination: {
+        page: 1,
+        per_page: 200,
+      },
+    }),
+  });
 
-  return products as Record<string, unknown>[];
+  const searchPayload = await parseSellsyJsonResponse(searchResponse);
+
+  if (!searchResponse.ok) {
+    throw new Error(
+      `Sellsy product fetch failed [${searchResponse.status}]: ${searchPayload.text || listPayload.text}`,
+    );
+  }
+
+  return extractSellsyCollection(searchPayload.data);
 }
 
 function normalizeProducts(products: Record<string, unknown>[]) {
