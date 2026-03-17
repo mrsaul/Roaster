@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
 import { Button } from "@/components/ui/button";
 import type { Order } from "@/lib/store";
-import { format, parseISO } from "date-fns";
+import { format, getDay, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ClipboardList, House, ShoppingBag, X } from "lucide-react";
 
@@ -22,12 +22,25 @@ interface OrderHistoryPageProps {
   onViewOrders: () => void;
 }
 
+function getDefaultDeliveryCopy() {
+  return "Friday · daytime delivery";
+}
+
 function getEstimatedDeliveryLabel(selectedDate: string | null) {
   if (!selectedDate) {
-    return "Friday · 10am–2pm";
+    return getDefaultDeliveryCopy();
   }
 
   return `${format(new Date(`${selectedDate}T00:00:00`), "EEEE d MMMM")} · daytime delivery`;
+}
+
+function getDeliveryHint(selectedDate: string | null) {
+  if (!selectedDate) {
+    return "Choose a Tuesday or Friday delivery slot.";
+  }
+
+  const day = getDay(new Date(`${selectedDate}T00:00:00`));
+  return day === 2 ? "Tuesday route · daytime delivery" : "Friday route · daytime delivery";
 }
 
 export default function OrderHistoryPage({
@@ -71,7 +84,7 @@ export default function OrderHistoryPage({
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto max-w-lg space-y-4">
+        <div className="mx-auto max-w-lg space-y-3">
           <div>
             <h1 className="text-base font-medium text-foreground">Orders</h1>
             <p className="text-xs text-muted-foreground">Track active and placed orders</p>
@@ -102,7 +115,7 @@ export default function OrderHistoryPage({
 
       <main className="mx-auto max-w-lg px-4 py-4 pb-40">
         <motion.div
-          className="space-y-4"
+          className="space-y-3"
           initial="hidden"
           animate="visible"
           variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
@@ -119,75 +132,72 @@ export default function OrderHistoryPage({
                 <motion.section
                   key="draft-order"
                   variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-                  className="space-y-4"
+                  className="space-y-3"
                 >
                   <div className="space-y-1 px-1">
-                    <p className="text-xl font-semibold tracking-tight text-foreground">
+                    <p className="text-lg font-semibold tracking-tight text-foreground">
                       Delivering: {getEstimatedDeliveryLabel(draftDeliveryDate)}
                     </p>
-                    <p className="text-sm text-muted-foreground">You can still edit or remove coffees before placing the order.</p>
+                    <p className="text-sm text-muted-foreground">{getDeliveryHint(draftDeliveryDate)}</p>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm">
-                    <div className="space-y-3 rounded-2xl border border-border bg-background/80 p-3">
+                  <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+                    <div className="space-y-2 rounded-xl border border-border bg-background/80 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm font-medium text-foreground">Delivery date</span>
                         <span className="text-xs text-muted-foreground">
-                          {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Select a weekday"}
+                          {draftDeliveryDate ? format(new Date(`${draftDeliveryDate}T00:00:00`), "EEE, MMM d") : "Tue or Fri only"}
                         </span>
                       </div>
                       <DeliveryDatePicker selected={draftDeliveryDate} onSelect={onDraftDeliveryDateChange} />
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {order.items.map((item) => (
                       <motion.article
                         key={item.product.id}
                         variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-                        className="rounded-[2rem] border-2 border-foreground bg-card p-5 shadow-sm"
+                        className="rounded-[1.5rem] border-2 border-foreground bg-card p-4 shadow-sm"
                       >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-2">
-                            <div>
-                              <h2 className="text-2xl font-semibold uppercase leading-none tracking-tight text-foreground">
-                                {item.product.name}
-                              </h2>
-                              <p className="mt-2 text-lg font-semibold text-foreground">
-                                €{item.product.pricePerKg.toFixed(0)}/kg
-                                <span className="ml-2 text-sm font-medium uppercase tracking-wide text-muted-foreground">
-                                  in 3kg units
-                                </span>
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                              <span className="inline-flex h-3 w-3 rounded-full bg-foreground" aria-hidden="true" />
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1.5">
+                            <h2 className="text-xl font-semibold uppercase leading-tight tracking-tight text-foreground">
+                              {item.product.name}
+                            </h2>
+                            <p className="text-base font-semibold text-foreground">
+                              €{item.product.pricePerKg.toFixed(0)}/kg
+                              <span className="ml-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                3kg units
+                              </span>
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span>{item.product.roastLevel}</span>
-                              <span className="inline-flex h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
+                              <span aria-hidden="true">•</span>
                               <span>{item.product.origin}</span>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => onRemoveDraftItem(item.product.id)}
-                            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                             aria-label={`Remove ${item.product.name}`}
                           >
-                            <X className="h-7 w-7" />
+                            <X className="h-5 w-5" />
                           </button>
                         </div>
 
-                        <div className="mt-5 grid grid-cols-[1.5fr_auto_auto_auto] overflow-hidden rounded-2xl border-2 border-primary/40 bg-background">
-                          <div className="flex items-center justify-center px-4 py-3 text-xl font-semibold uppercase tracking-wide text-foreground">
+                        <div className="mt-3 grid grid-cols-[1.4fr_auto_auto_auto] overflow-hidden rounded-xl border border-primary/40 bg-background">
+                          <div className="flex items-center justify-center px-3 py-2.5 text-lg font-semibold uppercase tracking-wide text-foreground">
                             Order
                           </div>
-                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                          <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
                             –
                           </div>
-                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                          <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
                             {item.quantity}
                           </div>
-                          <div className="flex items-center justify-center border-l-2 border-primary/40 px-5 py-3 text-2xl font-semibold text-foreground">
+                          <div className="flex items-center justify-center border-l border-primary/40 px-4 py-2.5 text-xl font-semibold text-foreground">
                             +
                           </div>
                         </div>
@@ -195,12 +205,12 @@ export default function OrderHistoryPage({
                     ))}
                   </div>
 
-                  <div className="space-y-3 px-1">
+                  <div className="space-y-3 px-1 pt-1">
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>{draftTotalKg.toFixed(0)} kg total</span>
                       <span className="font-semibold text-foreground">€{draftTotalPrice.toFixed(2)}</span>
                     </div>
-                    <Button size="lg" onClick={onPlaceDraftOrder} className="h-16 w-full rounded-2xl text-xl font-semibold uppercase tracking-[0.16em]">
+                    <Button size="lg" onClick={onPlaceDraftOrder} className="h-14 w-full rounded-2xl text-lg font-semibold uppercase tracking-[0.16em]">
                       Order
                     </Button>
                   </div>

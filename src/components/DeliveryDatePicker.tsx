@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { addDays, format, isWeekend, isBefore, startOfDay } from "date-fns";
+import { addDays, format, getDay, startOfDay } from "date-fns";
 
 interface DeliveryDatePickerProps {
   selected: string | null;
@@ -10,10 +10,17 @@ interface DeliveryDatePickerProps {
 function getDeliveryDates(): { date: Date; available: boolean }[] {
   const today = startOfDay(new Date());
   const dates: { date: Date; available: boolean }[] = [];
-  for (let i = 2; i <= 16; i++) {
+
+  for (let i = 1; i <= 28; i++) {
     const d = addDays(today, i);
-    dates.push({ date: d, available: !isWeekend(d) });
+    const day = getDay(d);
+    const available = day === 2 || day === 5;
+
+    if (available) {
+      dates.push({ date: d, available: true });
+    }
   }
+
   return dates;
 }
 
@@ -21,7 +28,7 @@ export function DeliveryDatePicker({ selected, onSelect }: DeliveryDatePickerPro
   const dates = getDeliveryDates();
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none">
+    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
       {dates.map(({ date, available }) => {
         const iso = format(date, "yyyy-MM-dd");
         const isSelected = selected === iso;
@@ -32,16 +39,16 @@ export function DeliveryDatePicker({ selected, onSelect }: DeliveryDatePickerPro
             disabled={!available}
             onClick={() => onSelect(iso)}
             className={cn(
-              "flex-shrink-0 w-14 h-16 rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-colors duration-150",
-              available && !isSelected && "border-border bg-card text-foreground hover:bg-muted",
+              "flex h-14 w-14 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border text-foreground transition-colors duration-150",
+              available && !isSelected && "border-border bg-card hover:bg-muted",
               available && isSelected && "border-primary bg-primary text-primary-foreground",
               !available && "border-border bg-secondary text-muted-foreground opacity-30 line-through cursor-not-allowed"
             )}
           >
-            <span className="text-[10px] uppercase font-medium tracking-wide">
+            <span className="text-[9px] font-medium uppercase tracking-[0.18em]">
               {format(date, "EEE")}
             </span>
-            <span className="text-lg font-medium tabular-nums leading-none">
+            <span className="text-base font-semibold tabular-nums leading-none">
               {format(date, "d")}
             </span>
           </motion.button>
