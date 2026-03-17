@@ -19,6 +19,7 @@ type UsualOrderPreset = {
 
 interface CatalogPageProps {
   cart: {
+    items: { product: Product; quantity: number }[];
     totalKg: number;
     totalPrice: number;
     getQuantity: (id: string) => number;
@@ -349,10 +350,11 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
           </button>
           <button
             onClick={onViewOrders}
-            className="flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ClipboardList className="h-4 w-4" />
             Orders
+            {cart.items.length > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-success" aria-hidden="true" /> : null}
           </button>
         </div>
       </div>

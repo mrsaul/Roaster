@@ -225,6 +225,7 @@ const Index = () => {
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
   const lastOrderDate = orders[0]?.createdAt ?? null;
   const lastOrderTotal = orders[0]?.totalPrice ?? null;
+  const visibleOrders = role === "admin" ? [...orders, ...MOCK_ORDERS] : orders;
 
   if (authLoading) {
     return (
@@ -284,7 +285,10 @@ const Index = () => {
     case "orders":
       return (
         <OrderHistoryPage
-          orders={role === "admin" ? [...orders, ...MOCK_ORDERS] : orders}
+          orders={visibleOrders}
+          draftItems={cart.items}
+          draftTotalKg={cart.totalKg}
+          draftTotalPrice={cart.totalPrice}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
