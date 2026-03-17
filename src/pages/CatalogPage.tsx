@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ProductCard } from "@/components/ProductCard";
 import { CartBar } from "@/components/CartBar";
 import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
+import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { MOCK_PRODUCTS, type Product } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
@@ -163,28 +163,24 @@ export default function CatalogPage({ cart, onCheckout, onViewOrders, onLogout }
       <main className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-6">
         <section className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-5">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Client Login</p>
+            <p className="text-sm text-muted-foreground">Client Login</p>
             <h2 className="mt-2 text-xl font-medium tracking-tight text-foreground">Your usual order:</h2>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {usualOrderProducts.map(({ product }) => (
-              <div key={product.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{product.name}</p>
-                </div>
-                <div className="shrink-0">
-                  <ProductCard
-                    product={product}
-                    quantity={cart.getQuantity(product.id)}
-                    onQuantityChange={cart.updateQuantity}
-                  />
-                </div>
+              <div key={product.id} className="space-y-2">
+                <p className="text-base font-medium text-foreground">{product.name}</p>
+                <QuantityStepper
+                  value={cart.getQuantity(product.id)}
+                  onChange={(qty) => cart.updateQuantity(product, qty)}
+                  className="justify-start"
+                />
               </div>
             ))}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-border bg-background px-4 py-4">
+          <div className="space-y-3 pt-2">
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-muted-foreground">Delivery Date:</span>
               <span className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-foreground">{deliveryLabel}</span>
@@ -192,16 +188,16 @@ export default function CatalogPage({ cart, onCheckout, onViewOrders, onLogout }
             <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
+          <div className="space-y-4 border-t border-border pt-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Total</p>
-              <p className="text-3xl font-medium tabular-nums text-foreground">€{usualOrderTotal.toFixed(0)}</p>
+              <p className="text-sm text-muted-foreground">TOTAL</p>
+              <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
             </div>
             <Button
               size="lg"
               onClick={onCheckout}
               disabled={!usualOrderHasItems}
-              className="rounded-xl px-6"
+              className="w-full rounded-xl"
             >
               Confirm Order
             </Button>
