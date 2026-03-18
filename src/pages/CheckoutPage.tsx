@@ -88,7 +88,7 @@ export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onCon
                 {confirming ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending to Sellsy…
+                    Placing order…
                   </>
                 ) : (
                   "Confirm Order"
