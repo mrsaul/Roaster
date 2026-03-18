@@ -75,7 +75,7 @@ export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onCon
                 className="flex items-center justify-center gap-2 h-12 bg-success text-success-foreground rounded-lg text-sm font-medium"
               >
                 <Check className="w-4 h-4" />
-                Synced to Sellsy
+                Order placed!
               </motion.div>
             ) : (
               <motion.button
