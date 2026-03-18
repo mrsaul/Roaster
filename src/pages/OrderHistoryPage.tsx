@@ -237,7 +237,7 @@ export default function OrderHistoryPage({
               );
             }
 
-            return <OrderCard key={`${order.id}-${order.createdAt}`} order={order} />;
+            return <OrderCard key={`${order.id}-${order.createdAt}`} order={order} onReorder={onReorder} />;
           })}
         </motion.div>
       </main>
