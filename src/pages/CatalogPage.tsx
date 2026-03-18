@@ -167,7 +167,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   }, [cart, resolvedUsualOrderItems]);
 
   const usualOrderHasItems = resolvedUsualOrderItems.some(({ product }) => cart.getQuantity(product.id) > 0);
-  const deliveryLabel = deliveryDate ? format(new Date(`${deliveryDate}T00:00:00`), "EEEE") : getNextWeekdayLabel();
+  
 
   return (
     <div className="min-h-screen bg-background">
