@@ -8,7 +8,7 @@ import { MOCK_PRODUCTS, type Product } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { LogOut, ClipboardList, House, ShoppingBag, RefreshCw } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
-import { addDays, format, isWeekend, startOfDay } from "date-fns";
+import { format } from "date-fns";
 
 type ProductRow = Tables<"products">;
 
