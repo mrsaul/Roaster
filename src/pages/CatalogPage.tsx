@@ -269,11 +269,47 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                   }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-xl border border-border bg-card p-4">
-                    <p className="text-base font-medium text-foreground">{product.name}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{product.origin}</p>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium tabular-nums text-foreground">€{product.pricePerKg.toFixed(2)}/kg</span>
+                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm">
+                    {/* Header: name + roast badge */}
+                    <div className="space-y-1.5">
+                      <h3 className="text-base font-semibold leading-snug text-foreground">
+                        {product.name}
+                      </h3>
+                      {product.description && (
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {product.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Detail chips */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {product.roastLevel && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                          <Coffee className="h-3 w-3" />
+                          {product.roastLevel.charAt(0).toUpperCase() + product.roastLevel.slice(1)}
+                        </span>
+                      )}
+                      {product.origin && product.origin !== "Unknown origin" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {product.origin}
+                        </span>
+                      )}
+                      <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-mono tabular-nums text-secondary-foreground">
+                        SKU {product.sku}
+                      </span>
+                    </div>
+
+                    {/* Price + stepper */}
+                    <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                      <div>
+                        <span className="text-lg font-semibold tabular-nums text-foreground">
+                          €{product.pricePerKg.toFixed(2)}
+                        </span>
+                        <span className="ml-1 text-xs text-muted-foreground">/kg</span>
+                        <p className="text-[11px] text-muted-foreground">3 kg units</p>
+                      </div>
                       <QuantityStepper
                         value={cart.getQuantity(product.id)}
                         onChange={(qty) => cart.updateQuantity(product, qty)}
