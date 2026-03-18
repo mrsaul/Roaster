@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CartBar } from "@/components/CartBar";
-import { DeliveryDatePicker } from "@/components/DeliveryDatePicker";
+
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
 import { MOCK_PRODUCTS, type Product } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { LogOut, ClipboardList, House, ShoppingBag, RefreshCw } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
-import { addDays, format, isWeekend, startOfDay } from "date-fns";
+import { format } from "date-fns";
 
 type ProductRow = Tables<"products">;
 
@@ -62,15 +62,7 @@ const mapProductRow = (product: ProductRow): Product => ({
   available: product.is_active,
 });
 
-function getNextWeekdayLabel() {
-  let candidate = addDays(startOfDay(new Date()), 1);
 
-  while (isWeekend(candidate)) {
-    candidate = addDays(candidate, 1);
-  }
-
-  return format(candidate, "EEEE");
-}
 
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -80,7 +72,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
+  
   const initializedUsualOrder = useRef(false);
 
   const loadProducts = useCallback(async () => {
@@ -167,7 +159,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
   }, [cart, resolvedUsualOrderItems]);
 
   const usualOrderHasItems = resolvedUsualOrderItems.some(({ product }) => cart.getQuantity(product.id) > 0);
-  const deliveryLabel = deliveryDate ? format(new Date(`${deliveryDate}T00:00:00`), "EEEE") : getNextWeekdayLabel();
+  
 
   return (
     <div className="min-h-screen bg-background">
@@ -219,13 +211,6 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
               ))}
             </div>
 
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-muted-foreground">Delivery Date:</span>
-                <span className="rounded-full bg-secondary px-3 py-1 text-sm font-medium text-foreground">{deliveryLabel}</span>
-              </div>
-              <DeliveryDatePicker selected={deliveryDate} onSelect={setDeliveryDate} />
-            </div>
 
             <div className="space-y-4 border-t border-border pt-4">
               <div>
