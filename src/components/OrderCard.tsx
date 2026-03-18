@@ -119,18 +119,16 @@ export function OrderCard({ order, onReorder }: OrderCardProps) {
               </div>
 
               {/* Reorder button */}
-              {onReorder && (
-                <div className="flex justify-center pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onReorder(order)}
-                    className="rounded-full border-primary/40 text-primary hover:bg-primary/10"
-                  >
-                    Order again
-                  </Button>
-                </div>
-              )}
+              <div className="flex justify-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onReorder?.(order)}
+                  className="rounded-full border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  Order again
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}
