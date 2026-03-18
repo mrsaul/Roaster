@@ -238,27 +238,27 @@ export default function OrderHistoryPage({
               <motion.div
                 key={`${order.id}-${order.createdAt}`}
                 variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }}
-                className="space-y-3 rounded-lg border border-border bg-card p-4"
+                className="space-y-3 rounded-2xl border border-border bg-card p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <span className="font-mono text-sm text-foreground">{order.id}</span>
-                    <p className="text-xs text-muted-foreground">{format(parseISO(order.createdAt), "MMM d, yyyy")}</p>
-                  </div>
+                  <p className="text-lg font-semibold text-foreground">
+                    {format(parseISO(order.deliveryDate), "EEEE d MMMM")}
+                  </p>
                   <StatusBadge status={order.status} sellsyId={order.sellsyId} />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Delivery {format(parseISO(order.deliveryDate), "MMM d, yyyy")}</span>
-                  <span className="font-medium tabular-nums text-foreground">
-                    {order.totalKg.toFixed(1)} kg · €{order.totalPrice.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground">
+
+                <div className="space-y-1.5">
                   {order.items.map((item) => (
-                    <span key={item.product.id} className="mr-3 inline-block">
-                      {item.product.name} ({item.quantity}kg)
-                    </span>
+                    <div key={item.product.id} className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">{item.product.name}</span>
+                      <span className="text-sm tabular-nums text-muted-foreground">{item.quantity} kg</span>
+                    </div>
                   ))}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border pt-2 text-sm">
+                  <span className="text-muted-foreground">{order.totalKg.toFixed(1)} kg total</span>
+                  <span className="font-semibold tabular-nums text-foreground">€{order.totalPrice.toFixed(2)}</span>
                 </div>
               </motion.div>
             );
