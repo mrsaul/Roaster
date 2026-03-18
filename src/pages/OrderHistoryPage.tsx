@@ -19,6 +19,7 @@ interface OrderHistoryPageProps {
   onRemoveDraftItem: (productId: string) => void;
   onDraftQuantityChange: (productId: string, nextQuantity: number) => void;
   onPlaceDraftOrder: () => void;
+  onReorder: (order: Order) => void;
   onGoHome: () => void;
   onGoShop: () => void;
   onViewOrders: () => void;
@@ -55,6 +56,7 @@ export default function OrderHistoryPage({
   onRemoveDraftItem,
   onDraftQuantityChange,
   onPlaceDraftOrder,
+  onReorder,
   onGoHome,
   onGoShop,
   onViewOrders,
@@ -235,7 +237,7 @@ export default function OrderHistoryPage({
               );
             }
 
-            return <OrderCard key={`${order.id}-${order.createdAt}`} order={order} />;
+            return <OrderCard key={`${order.id}-${order.createdAt}`} order={order} onReorder={onReorder} />;
           })}
         </motion.div>
       </main>

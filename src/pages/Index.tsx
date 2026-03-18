@@ -252,6 +252,11 @@ const Index = () => {
     void handleConfirmOrder(draftDeliveryDate);
   }, [cart.items.length, draftDeliveryDate, handleConfirmOrder]);
 
+  const handleReorder = useCallback((order: Order) => {
+    cart.hydrateCart(order.items);
+    setView("checkout");
+  }, [cart]);
+
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
   const lastOrderDate = orders[0]?.createdAt ?? null;
   const lastOrderTotal = orders[0]?.totalPrice ?? null;
@@ -324,6 +329,7 @@ const Index = () => {
           onRemoveDraftItem={handleRemoveDraftItem}
           onDraftQuantityChange={handleDraftQuantityChange}
           onPlaceDraftOrder={handlePlaceDraftOrder}
+          onReorder={handleReorder}
           onGoHome={() => setView("home")}
           onGoShop={() => setView("shop")}
           onViewOrders={() => setView("orders")}
