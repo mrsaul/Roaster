@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { LogOut, Users, Package, Calendar, Coffee, BarChart3, BadgeEuro, Truck, Receipt, ExternalLink, Download, RefreshCw, AlertCircle, CheckCircle2, Clock3 } from "lucide-react";
-import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import {
+  LogOut, Users, Package, Coffee, BarChart3, BadgeEuro, Receipt,
+  ExternalLink, Download, RefreshCw, AlertCircle, CheckCircle2, Clock3,
+  Truck, Calendar, ChevronRight, Search, X, Check, Send, RotateCcw,
+} from "lucide-react";
+import { format, formatDistanceToNow, parseISO, isToday } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
-import { StatusBadge } from "@/components/StatusBadge";
-import { MOCK_ORDERS, type Order } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+/* ─── Types ─── */
 
 type AdminClientRow = {
   id: string;
@@ -43,17 +51,6 @@ type AdminProductRow = {
   synced_at: string;
 };
 
-type InvoiceStatus = "not-sent" | "sent" | "error" | "paid";
-
-type AdminInvoiceRow = {
-  id: string;
-  client: string;
-  sellsyId: string;
-  total: number;
-  status: InvoiceStatus;
-  issuedAt: string;
-};
-
 type ProductParseError = {
   sellsy_id: string | null;
   sku: string | null;
@@ -71,134 +68,226 @@ type SyncRunRow = {
   created_at: string;
 };
 
+type OrderStatus = "draft" | "approved" | "sent_to_sellsy" | "error";
+
+type AdminOrderItem = {
+  product_name: string;
+  product_sku: string | null;
+  quantity: number;
+  price_per_kg: number;
+};
+
+type AdminOrder = {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  delivery_date: string;
+  total_kg: number;
+  total_price: number;
+  status: OrderStatus;
+  sellsy_id: string | null;
+  created_at: string;
+  items: AdminOrderItem[];
+};
+
 interface AdminDashboardProps {
-  orders: Order[];
+  orders: never[];
   onLogout: () => void;
 }
 
-const MOCK_INVOICES: AdminInvoiceRow[] = [
-  { id: "INV-203", client: "Café XYZ", sellsyId: "48392", total: 624.5, status: "not-sent", issuedAt: "2026-03-15" },
-  { id: "INV-202", client: "Atelier Nord", sellsyId: "48111", total: 488, status: "sent", issuedAt: "2026-03-14" },
-  { id: "INV-201", client: "Maison Aube", sellsyId: "47988", total: 712.2, status: "error", issuedAt: "2026-03-12" },
-  { id: "INV-200", client: "Café Lumière", sellsyId: "47803", total: 930.4, status: "paid", issuedAt: "2026-03-10" },
-];
+/* ─── Helpers ─── */
 
 function formatDate(value: string | null) {
   if (!value) return "—";
-
-  try {
-    return format(parseISO(value), "MMM d, yyyy");
-  } catch {
-    return "—";
-  }
+  try { return format(parseISO(value), "MMM d, yyyy"); } catch { return "—"; }
 }
 
-function buildClientInsights(client: AdminClientRow | null) {
-  if (!client) {
-    return {
-      usualOrder: "—",
-      preferredDelivery: "—",
-      priceTier: "—",
-      averageWeeklyVolume: "—",
-      favoriteCoffees: "Awaiting order-line sync",
-    };
-  }
+const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  draft: "Draft",
+  approved: "Approved",
+  sent_to_sellsy: "Sent to Sellsy",
+  error: "Error",
+};
 
-  const weeklyVolumeKg = client.total_orders && client.total_orders > 0 ? Math.max(1, Math.round((client.total_orders * 12) / 4)) : 12;
+const ORDER_STATUS_CLASS: Record<OrderStatus, string> = {
+  draft: "bg-primary/10 text-primary border-primary/20",
+  approved: "bg-accent text-accent-foreground border-border",
+  sent_to_sellsy: "bg-success/10 text-success border-success/20",
+  error: "bg-destructive/10 text-destructive border-destructive/20",
+};
 
-  return {
-    usualOrder: `${weeklyVolumeKg} kg/week`,
-    preferredDelivery: "Tuesday",
-    priceTier: client.client_type === "client" ? "Wholesale A" : client.client_type === "prospect" ? "Prospect" : "Partner",
-    averageWeeklyVolume: `${weeklyVolumeKg} kg/week`,
-    favoriteCoffees: client.client_type === "client" ? "Espresso Blend, House Filter, Decaf" : "Awaiting order-line sync",
-  };
+function normalizeStatus(raw: string): OrderStatus {
+  if (raw === "draft" || raw === "approved" || raw === "sent_to_sellsy" || raw === "error") return raw;
+  if (raw === "synced" || raw === "fulfilled" || raw === "confirmed") return "sent_to_sellsy";
+  return "draft";
 }
 
-function getInvoiceStatusLabel(status: InvoiceStatus) {
-  switch (status) {
-    case "not-sent":
-      return "Not sent";
-    case "sent":
-      return "Sent";
-    case "error":
-      return "Error";
-    case "paid":
-      return "Paid (synced back)";
-  }
-}
+/* ─── Component ─── */
 
-function getInvoiceStatusClassName(status: InvoiceStatus) {
-  switch (status) {
-    case "not-sent":
-      return "bg-muted text-muted-foreground";
-    case "sent":
-      return "bg-primary/10 text-primary";
-    case "error":
-      return "bg-destructive/10 text-destructive";
-    case "paid":
-      return "bg-accent text-accent-foreground";
-  }
-}
+export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
+  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products">("orders");
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<"created_at" | "delivery_date" | "total_price">("created_at");
+  const [sortAsc, setSortAsc] = useState(false);
 
-export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products" | "invoicing">("clients");
+  // Clients
   const [clients, setClients] = useState<AdminClientRow[]>([]);
-  const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [runningProductSync, setRunningProductSync] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
+
+  // Products
+  const [products, setProducts] = useState<AdminProductRow[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [productError, setProductError] = useState<string | null>(null);
+  const [runningProductSync, setRunningProductSync] = useState(false);
   const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   const [syncRunError, setSyncRunError] = useState<string | null>(null);
-  const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
+
   const { toast } = useToast();
 
-  const allOrders = useMemo(() => [...orders, ...MOCK_ORDERS], [orders]);
+  /* ── Load orders ── */
+  const loadOrders = useCallback(async () => {
+    setLoadingOrders(true);
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select(`
+          id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
+          order_items ( product_name, product_sku, quantity, price_per_kg )
+        `)
+        .order("created_at", { ascending: false });
 
+      if (error) throw error;
+
+      const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => ({
+        id: o.id,
+        user_id: o.user_id,
+        user_email: null,
+        delivery_date: o.delivery_date,
+        total_kg: Number(o.total_kg),
+        total_price: Number(o.total_price),
+        status: normalizeStatus(o.status),
+        sellsy_id: o.sellsy_id,
+        created_at: o.created_at,
+        items: (o.order_items ?? []).map((i: any) => ({
+          product_name: i.product_name,
+          product_sku: i.product_sku,
+          quantity: Number(i.quantity),
+          price_per_kg: Number(i.price_per_kg),
+        })),
+      }));
+
+      setAdminOrders(mapped);
+    } catch (err) {
+      toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [toast]);
+
+  /* ── Approve order ── */
+  const approveOrder = useCallback(async (order: AdminOrder) => {
+    setApprovingIds((prev) => new Set(prev).add(order.id));
+    try {
+      // 1. Set status to approved
+      const { error: updateErr } = await supabase
+        .from("orders")
+        .update({ status: "approved" })
+        .eq("id", order.id);
+      if (updateErr) throw updateErr;
+
+      // 2. Call Sellsy sync to create invoice
+      const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
+        body: {
+          mode: "create-order",
+          orderId: order.id,
+          items: order.items.map((i) => ({
+            name: i.product_name,
+            quantity: i.quantity,
+            unitPrice: i.price_per_kg,
+          })),
+          totalAmount: order.total_price,
+        },
+      });
+
+      if (sellsyErr || !sellsyResult?.success) {
+        // Mark as error
+        await supabase.from("orders").update({ status: "error" }).eq("id", order.id);
+        toast({
+          title: "Sellsy sync failed",
+          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
+          variant: "destructive",
+        });
+      } else {
+        // Success → sent_to_sellsy
+        await supabase
+          .from("orders")
+          .update({
+            status: "sent_to_sellsy",
+            sellsy_id: sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null,
+          })
+          .eq("id", order.id);
+        toast({ title: "Order approved & sent to Sellsy" });
+      }
+
+      await loadOrders();
+    } catch (err) {
+      toast({ title: "Approve failed", description: String(err), variant: "destructive" });
+    } finally {
+      setApprovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(order.id);
+        return next;
+      });
+    }
+  }, [loadOrders, toast]);
+
+  /* ── Bulk approve ── */
+  const approveAllDrafts = useCallback(async () => {
+    const drafts = adminOrders.filter((o) => o.status === "draft");
+    if (drafts.length === 0) return;
+    for (const draft of drafts) {
+      await approveOrder(draft);
+    }
+  }, [adminOrders, approveOrder]);
+
+  /* ── Load clients ── */
   const loadClients = async () => {
     setLoadingClients(true);
     setClientError(null);
-
     try {
       const { data, error } = await supabase.functions.invoke("sellsy-sync", {
         body: { mode: "list-clients" },
       });
-
-      if (error) {
-        throw new Error(error.message || "Sellsy client fetch failed");
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || "Unable to load clients from Sellsy");
-      }
-
-      setClients(Array.isArray(data.clients) ? (data.clients as AdminClientRow[]) : []);
-    } catch (error) {
-      setClientError(error instanceof Error ? error.message : "Unknown Sellsy client error");
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Unable to load clients");
+      setClients(Array.isArray(data.clients) ? data.clients : []);
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingClients(false);
     }
   };
 
+  /* ── Load products ── */
   const loadProducts = async () => {
     setLoadingProducts(true);
     setProductError(null);
-
     try {
       const { data, error } = await supabase
         .from("products")
         .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at")
         .order("name", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message || "Sellsy product fetch failed");
-      }
-
+      if (error) throw new Error(error.message);
       setProducts((data as AdminProductRow[]) ?? []);
-    } catch (error) {
-      setProductError(error instanceof Error ? error.message : "Unknown Sellsy product error");
+    } catch (err) {
+      setProductError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingProducts(false);
     }
@@ -206,7 +295,6 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
 
   const loadLatestProductSync = async () => {
     setSyncRunError(null);
-
     try {
       const { data, error } = await supabase
         .from("sync_runs")
@@ -216,153 +304,133 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
         .order("completed_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-
-      if (error) {
-        throw new Error(error.message || "Sync status fetch failed");
-      }
-
+      if (error) throw new Error(error.message);
       setSyncRun((data as SyncRunRow | null) ?? null);
-    } catch (error) {
-      setSyncRunError(error instanceof Error ? error.message : "Unknown sync status error");
+    } catch (err) {
+      setSyncRunError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const runProductSync = async () => {
     setRunningProductSync(true);
     setProductError(null);
-    setSyncRunError(null);
-
     try {
       const { data, error } = await supabase.functions.invoke("sellsy-sync", {
         body: { mode: "sync-products" },
       });
-
-      if (error) {
-        throw new Error(error.message || "Sellsy product sync failed");
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || "Unable to sync products from Sellsy");
-      }
-
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Sync failed");
       await Promise.all([loadProducts(), loadLatestProductSync()]);
-
-      toast({
-        title: "Product sync completed",
-        description: `${data.syncedCount ?? 0} product${data.syncedCount === 1 ? "" : "s"} refreshed from Sellsy.`,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown Sellsy sync error";
-      setProductError(message);
-      setSyncRunError(message);
-      toast({
-        title: "Product sync failed",
-        description: message,
-        variant: "destructive",
-      });
+      toast({ title: "Product sync completed", description: `${data.syncedCount ?? 0} products refreshed.` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setProductError(msg);
+      toast({ title: "Product sync failed", description: msg, variant: "destructive" });
     } finally {
       setRunningProductSync(false);
     }
   };
 
+  /* ── Init ── */
   useEffect(() => {
-    void Promise.all([loadClients(), loadProducts(), loadLatestProductSync()]);
-  }, []);
+    void loadOrders();
+    void loadClients();
+    void loadProducts();
+    void loadLatestProductSync();
+  }, [loadOrders]);
 
-  const clientSummary = useMemo(() => {
-    const activeClients = clients.filter((client) => (client.total_orders ?? 0) > 0).length;
-    const totalSpend = clients.reduce((sum, client) => sum + (client.total_spend ?? 0), 0);
+  /* ── Derived ── */
+  const stats = useMemo(() => {
+    const todayOrders = adminOrders.filter((o) => {
+      try { return isToday(parseISO(o.created_at)); } catch { return false; }
+    });
+    const totalKg = adminOrders.reduce((s, o) => s + o.total_kg, 0);
+    const pendingApproval = adminOrders.filter((o) => o.status === "draft").length;
+    const errorCount = adminOrders.filter((o) => o.status === "error").length;
+    return { todayCount: todayOrders.length, totalKg, pendingApproval, errorCount };
+  }, [adminOrders]);
 
-    return {
-      totalClients: clients.length,
-      activeClients,
-      totalSpend,
-    };
-  }, [clients]);
+  const filteredOrders = useMemo(() => {
+    let result = adminOrders;
+    if (statusFilter !== "all") {
+      result = result.filter((o) => o.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (o) =>
+          o.id.toLowerCase().includes(q) ||
+          (o.user_email ?? "").toLowerCase().includes(q) ||
+          o.user_id.toLowerCase().includes(q) ||
+          o.items.some((i) => i.product_name.toLowerCase().includes(q)),
+      );
+    }
+    result = [...result].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+      if (typeof aVal === "number" && typeof bVal === "number") return sortAsc ? aVal - bVal : bVal - aVal;
+      return sortAsc ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
+    });
+    return result;
+  }, [adminOrders, statusFilter, searchQuery, sortField, sortAsc]);
 
-  const productSummary = useMemo(() => {
-    const activeProducts = products.filter((product) => product.is_active).length;
-    const averagePrice = products.length > 0
-      ? products.reduce((sum, product) => sum + product.price_per_kg, 0) / products.length
-      : 0;
+  const draftCount = adminOrders.filter((o) => o.status === "draft").length;
 
-    return {
-      totalProducts: products.length,
-      activeProducts,
-      averagePrice,
-    };
-  }, [products]);
+  const clientSummary = useMemo(() => ({
+    totalClients: clients.length,
+    activeClients: clients.filter((c) => (c.total_orders ?? 0) > 0).length,
+    totalSpend: clients.reduce((s, c) => s + (c.total_spend ?? 0), 0),
+  }), [clients]);
 
-  const invoiceSummary = useMemo(() => {
-    return {
-      notSent: MOCK_INVOICES.filter((invoice) => invoice.status === "not-sent").length,
-      sent: MOCK_INVOICES.filter((invoice) => invoice.status === "sent").length,
-      error: MOCK_INVOICES.filter((invoice) => invoice.status === "error").length,
-      paid: MOCK_INVOICES.filter((invoice) => invoice.status === "paid").length,
-    };
-  }, []);
+  const productSummary = useMemo(() => ({
+    totalProducts: products.length,
+    activeProducts: products.filter((p) => p.is_active).length,
+    averagePrice: products.length > 0 ? products.reduce((s, p) => s + p.price_per_kg, 0) / products.length : 0,
+  }), [products]);
 
-  const insights = useMemo(() => buildClientInsights(selectedClient), [selectedClient]);
   const latestParseErrors = syncRun?.parse_errors ?? [];
   const latestSyncTimestamp = syncRun?.completed_at ?? syncRun?.created_at ?? null;
 
-  const sectionLabel =
-    activeSection === "orders"
-      ? "Orders"
-      : activeSection === "products"
-        ? "Products"
-        : activeSection === "invoicing"
-          ? "Invoicing"
-          : "Clients";
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortAsc(!sortAsc);
+    else { setSortField(field); setSortAsc(false); }
+  };
+
+  const sectionLabel = activeSection === "orders" ? "Orders" : activeSection === "products" ? "Products" : "Clients";
+
+  /* ── Sidebar nav items ── */
+  const navItems = [
+    { key: "orders" as const, icon: Package, label: "Orders", badge: draftCount > 0 ? draftCount : null },
+    { key: "clients" as const, icon: Users, label: "Clients" },
+    { key: "products" as const, icon: Coffee, label: "Products" },
+  ];
 
   return (
     <>
       <div className="min-h-screen bg-background flex">
+        {/* Sidebar */}
         <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
           <h1 className="text-base font-medium text-foreground tracking-tight mb-1">PluralRoaster</h1>
           <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
 
           <nav className="space-y-1 flex-1">
-            <button
-              type="button"
-              onClick={() => setActiveSection("orders")}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                activeSection === "orders" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              <Package className="w-4 h-4" /> Orders
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection("clients")}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                activeSection === "clients" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              <Users className="w-4 h-4" /> Clients
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection("products")}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                activeSection === "products" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              <Coffee className="w-4 h-4" /> Products
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection("invoicing")}
-              className={cn(
-                "ml-6 flex w-[calc(100%-1.5rem)] items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                activeSection === "invoicing" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              <Receipt className="w-4 h-4" /> Invoicing
-            </button>
+            {navItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setActiveSection(item.key)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                )}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+                {item.badge && (
+                  <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">{item.badge}</Badge>
+                )}
+              </button>
+            ))}
           </nav>
 
           <button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -370,19 +438,216 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
           </button>
         </aside>
 
-        <main className="flex-1 p-4 lg:p-8">
-          <div className="max-w-5xl mx-auto">
+        {/* Main */}
+        <main className="flex-1 p-4 lg:p-8 overflow-auto">
+          <div className="max-w-6xl mx-auto">
+            {/* Mobile header */}
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
                 <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
                 <p className="text-xs text-muted-foreground">{sectionLabel}</p>
               </div>
-              <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
-                <LogOut className="w-5 h-5 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                {navItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setActiveSection(item.key)}
+                    className={cn(
+                      "p-2 rounded-lg transition-colors relative",
+                      activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.badge && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
+                  <LogOut className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
-            {activeSection === "clients" ? (
+            {/* ═══════════ ORDERS ═══════════ */}
+            {activeSection === "orders" && (
+              <section className="space-y-6">
+                {/* Stats */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Orders today</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{stats.todayCount}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Total kg ordered</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{stats.totalKg.toFixed(0)}</p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Pending approval</p>
+                    <p className={cn("text-2xl font-medium tabular-nums", stats.pendingApproval > 0 ? "text-primary" : "text-foreground")}>
+                      {stats.pendingApproval}
+                    </p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Errors</p>
+                    <p className={cn("text-2xl font-medium tabular-nums", stats.errorCount > 0 ? "text-destructive" : "text-foreground")}>
+                      {stats.errorCount}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Toolbar */}
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search orders…"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 w-56"
+                      />
+                      {searchQuery && (
+                        <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      )}
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-44">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="sent_to_sellsy">Sent to Sellsy</SelectItem>
+                        <SelectItem value="error">Error</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
+                      <RefreshCw className="w-4 h-4" /> Refresh
+                    </Button>
+                    {draftCount > 0 && (
+                      <Button
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => void approveAllDrafts()}
+                        disabled={approvingIds.size > 0}
+                      >
+                        <Send className="w-4 h-4" /> Approve all ({draftCount})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Orders table */}
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableHead>Order ID</TableHead>
+                          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("created_at")}>
+                            Order Date {sortField === "created_at" && (sortAsc ? "↑" : "↓")}
+                          </TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Items</TableHead>
+                          <TableHead className="text-right">Weight</TableHead>
+                          <TableHead className="text-right cursor-pointer select-none" onClick={() => handleSort("total_price")}>
+                            Total {sortField === "total_price" && (sortAsc ? "↑" : "↓")}
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none" onClick={() => handleSort("delivery_date")}>
+                            Delivery {sortField === "delivery_date" && (sortAsc ? "↑" : "↓")}
+                          </TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loadingOrders ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Loading orders…</TableCell>
+                          </TableRow>
+                        ) : filteredOrders.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No orders found.</TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredOrders.map((order) => (
+                            <TableRow
+                              key={order.id}
+                              className={cn(
+                                "cursor-pointer transition-colors",
+                                order.status === "draft" && "bg-primary/[0.03]",
+                                order.status === "error" && "bg-destructive/[0.03]",
+                              )}
+                              onClick={() => setSelectedOrder(order)}
+                            >
+                              <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
+                              <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
+                              <TableCell className="text-foreground text-xs">{order.user_id.slice(0, 8)}…</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {order.items.length > 0
+                                  ? order.items.map((i) => `${i.product_name} ×${i.quantity}`).join(", ").slice(0, 40) + (order.items.length > 2 ? "…" : "")
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground">{order.total_kg.toFixed(0)} kg</TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
+                              <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d")}</TableCell>
+                              <TableCell>
+                                <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[order.status])}>
+                                  {ORDER_STATUS_LABEL[order.status]}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                {order.status === "draft" && (
+                                  <Button
+                                    size="sm"
+                                    className="gap-1.5"
+                                    disabled={approvingIds.has(order.id)}
+                                    onClick={() => void approveOrder(order)}
+                                  >
+                                    {approvingIds.has(order.id) ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Check className="w-3.5 h-3.5" />
+                                    )}
+                                    Approve
+                                  </Button>
+                                )}
+                                {order.status === "error" && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="gap-1.5"
+                                    disabled={approvingIds.has(order.id)}
+                                    onClick={() => void approveOrder(order)}
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" /> Retry
+                                  </Button>
+                                )}
+                                {order.status === "sent_to_sellsy" && order.sellsy_id && (
+                                  <span className="text-xs font-mono text-muted-foreground">{order.sellsy_id}</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ═══════════ CLIENTS ═══════════ */}
+            {activeSection === "clients" && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg p-4">
@@ -398,7 +663,6 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                     <p className="text-2xl font-medium tabular-nums text-foreground">€{clientSummary.totalSpend.toFixed(2)}</p>
                   </div>
                 </div>
-
                 <AdminClientsSection
                   clients={clients}
                   loading={loadingClients}
@@ -406,7 +670,10 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                   onSelectClient={setSelectedClient}
                 />
               </>
-            ) : activeSection === "products" ? (
+            )}
+
+            {/* ═══════════ PRODUCTS ═══════════ */}
+            {activeSection === "products" && (
               <section>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
@@ -423,6 +690,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                   </div>
                 </div>
 
+                {/* Sync status */}
                 <div className="mb-8 rounded-lg border border-border bg-card p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
@@ -435,18 +703,12 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2 self-start">
-                      <Button
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => void runProductSync()}
-                        disabled={runningProductSync}
-                      >
+                      <Button size="sm" className="gap-2" onClick={() => void runProductSync()} disabled={runningProductSync}>
                         <RefreshCw className={cn("h-4 w-4", runningProductSync && "animate-spin")} />
-                        {runningProductSync ? "running sync..." : "run product sync"}
+                        {runningProductSync ? "running sync…" : "run product sync"}
                       </Button>
                       <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadLatestProductSync()} disabled={runningProductSync}>
-                        <RefreshCw className="h-4 w-4" />
-                        refresh status
+                        <RefreshCw className="h-4 w-4" /> refresh status
                       </Button>
                     </div>
                   </div>
@@ -466,7 +728,7 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                             {latestSyncTimestamp ? formatDate(latestSyncTimestamp) : "—"}
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {latestSyncTimestamp ? `${formatDistanceToNow(parseISO(latestSyncTimestamp), { addSuffix: true })}` : "No run recorded"}
+                            {latestSyncTimestamp ? formatDistanceToNow(parseISO(latestSyncTimestamp), { addSuffix: true }) : "No run recorded"}
                           </p>
                         </div>
                         <div className="rounded-lg bg-muted/40 p-3">
@@ -488,30 +750,21 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                         </div>
                       </div>
 
-                      <div className="mt-4 rounded-lg border border-border overflow-hidden">
-                        <div className="border-b border-border bg-muted/40 px-4 py-3">
-                          <p className="text-sm font-medium text-foreground">Pricing parse errors</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {latestParseErrors.length > 0
-                              ? `${latestParseErrors.length} product price field${latestParseErrors.length > 1 ? "s" : ""} could not be parsed in the last sync.`
-                              : "No pricing parse errors were recorded in the last sync."}
-                          </p>
-                        </div>
-                        {latestParseErrors.length > 0 ? (
+                      {latestParseErrors.length > 0 && (
+                        <div className="mt-4 rounded-lg border border-border overflow-hidden">
+                          <div className="border-b border-border bg-muted/40 px-4 py-3">
+                            <p className="text-sm font-medium text-foreground">Pricing parse errors ({latestParseErrors.length})</p>
+                          </div>
                           <div className="divide-y divide-border">
                             {latestParseErrors.map((error, index) => (
-                              <div key={`${error.sellsy_id ?? error.sku ?? "parse-error"}-${index}`} className="px-4 py-3">
-                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                  <p className="text-sm font-medium text-foreground">{error.name ?? error.sku ?? error.sellsy_id ?? "Unknown product"}</p>
-                                  <p className="text-xs text-muted-foreground">Sellsy {error.sellsy_id ?? "—"}</p>
-                                </div>
+                              <div key={`${error.sellsy_id ?? index}`} className="px-4 py-3">
+                                <p className="text-sm font-medium text-foreground">{error.name ?? error.sku ?? "Unknown product"}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">Available fields: {error.available_keys.join(", ") || "—"}</p>
                               </div>
                             ))}
                           </div>
-                        ) : null}
-                      </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="mt-4 rounded-lg bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
@@ -520,162 +773,48 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
                   )}
                 </div>
 
+                {/* Products table */}
                 <div className="bg-card border border-border rounded-lg overflow-hidden">
-                  {productError ? (
+                  {productError && (
                     <div className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
                       <p className="text-sm font-medium text-foreground">Product fetch failed</p>
                       <p className="mt-1 text-xs text-muted-foreground">{productError}</p>
                     </div>
-                  ) : null}
-
+                  )}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Product</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Origin</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Roast</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">SKU</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Price</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableHead>Product</TableHead>
+                          <TableHead>Origin</TableHead>
+                          <TableHead>Roast</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {loadingProducts ? (
-                          <tr>
-                            <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Loading Sellsy products…</td>
-                          </tr>
+                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Loading products…</TableCell></TableRow>
                         ) : products.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No Sellsy products found.</td>
-                          </tr>
+                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No products found.</TableCell></TableRow>
                         ) : (
                           products.map((product) => (
-                            <tr key={product.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-3">
-                                <div>
-                                  <p className="font-medium text-foreground">{product.name}</p>
-                                  <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-muted-foreground">{product.origin ?? "—"}</td>
-                              <td className="px-4 py-3 text-muted-foreground capitalize">{product.roast_level ?? "—"}</td>
-                              <td className="px-4 py-3 font-mono text-foreground">{product.sku ?? "—"}</td>
-                              <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{product.price_per_kg.toFixed(2)}/kg</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground">{product.is_active ? "Active" : "Archived"}</td>
-                            </tr>
+                            <TableRow key={product.id}>
+                              <TableCell>
+                                <p className="font-medium text-foreground">{product.name}</p>
+                                <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{product.origin ?? "—"}</TableCell>
+                              <TableCell className="text-muted-foreground capitalize">{product.roast_level ?? "—"}</TableCell>
+                              <TableCell className="font-mono text-foreground">{product.sku ?? "—"}</TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{product.price_per_kg.toFixed(2)}/kg</TableCell>
+                              <TableCell className="text-right text-muted-foreground">{product.is_active ? "Active" : "Archived"}</TableCell>
+                            </TableRow>
                           ))
                         )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </section>
-            ) : activeSection === "invoicing" ? (
-              <section>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Not sent</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.notSent}</p>
-                  </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Sent</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.sent}</p>
-                  </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Error</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.error}</p>
-                  </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Paid (synced back)</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">{invoiceSummary.paid}</p>
-                  </div>
-                </div>
-
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Invoice</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Client</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Issued</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {MOCK_INVOICES.map((invoice) => (
-                          <tr key={invoice.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-3">
-                              <div>
-                                <p className="font-medium text-foreground">{invoice.id}</p>
-                                <p className="text-xs text-muted-foreground">Sellsy {invoice.sellsyId}</p>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-foreground">{invoice.client}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{formatDate(invoice.issuedAt)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{invoice.total.toFixed(2)}</td>
-                            <td className="px-4 py-3">
-                              <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", getInvoiceStatusClassName(invoice.status))}>
-                                {getInvoiceStatusLabel(invoice.status)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <Button variant="outline" size="sm" className="gap-2">
-                                  <RefreshCw className="w-4 h-4" />
-                                  resend invoice
-                                </Button>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                  <ExternalLink className="w-4 h-4" />
-                                  open invoice in Sellsy
-                                </Button>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                  <Download className="w-4 h-4" />
-                                  download PDF
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </section>
-            ) : (
-              <section>
-                <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Orders</h2>
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/50">
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Order</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Items</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Weight</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
-                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allOrders.map((order) => (
-                          <tr key={order.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-3 font-mono text-foreground">{order.id}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{format(parseISO(order.createdAt), "MMM d")}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{order.items.length} items</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-foreground">{order.totalKg.toFixed(1)} kg</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-foreground font-medium">€{order.totalPrice.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-right">
-                              <StatusBadge status={order.status} sellsyId={order.sellsyId} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </div>
               </section>
@@ -684,78 +823,165 @@ export default function AdminDashboard({ orders, onLogout }: AdminDashboardProps
         </main>
       </div>
 
+      {/* ── Order detail dialog ── */}
+      <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Order {selectedOrder?.id.slice(0, 8)}
+              {selectedOrder && (
+                <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[selectedOrder.status])}>
+                  {ORDER_STATUS_LABEL[selectedOrder.status]}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>Full order breakdown and actions.</DialogDescription>
+          </DialogHeader>
+
+          {selectedOrder && (
+            <div className="space-y-5">
+              {/* Info grid */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Client (user ID)</p>
+                  <p className="mt-1 text-sm font-mono text-foreground">{selectedOrder.user_id.slice(0, 16)}…</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Delivery date</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(selectedOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Order date</p>
+                  <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "MMM d, yyyy HH:mm")}</p>
+                </div>
+                {selectedOrder.sellsy_id && (
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs text-muted-foreground">Sellsy ID</p>
+                    <p className="mt-1 text-sm font-mono text-foreground">{selectedOrder.sellsy_id}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Items table */}
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                      <TableHead>Product</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead className="text-right">Qty (kg)</TableHead>
+                      <TableHead className="text-right">€/kg</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedOrder.items.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                    ) : (
+                      selectedOrder.items.map((item, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{item.product_sku ?? "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground">{item.quantity}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Totals */}
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <span className="text-sm text-muted-foreground">{selectedOrder.total_kg.toFixed(0)} kg total</span>
+                <span className="text-lg font-semibold tabular-nums text-foreground">€{selectedOrder.total_price.toFixed(2)}</span>
+              </div>
+
+              {/* Actions */}
+              {(selectedOrder.status === "draft" || selectedOrder.status === "error") && (
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    className="gap-2"
+                    disabled={approvingIds.has(selectedOrder.id)}
+                    onClick={() => {
+                      void approveOrder(selectedOrder);
+                      setSelectedOrder(null);
+                    }}
+                  >
+                    {selectedOrder.status === "error" ? (
+                      <><RotateCcw className="w-4 h-4" /> Retry & Send to Sellsy</>
+                    ) : (
+                      <><Check className="w-4 h-4" /> Approve & Send to Sellsy</>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Client detail dialog ── */}
       <Dialog open={Boolean(selectedClient)} onOpenChange={(open) => !open && setSelectedClient(null)}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{selectedClient?.name ?? "Client profile"}</DialogTitle>
-            <DialogDescription>
-              Sellsy client profile with delivery preferences and commercial insights.
-            </DialogDescription>
+            <DialogDescription>Sellsy client profile with delivery preferences and commercial insights.</DialogDescription>
           </DialogHeader>
-
           <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium text-foreground">Client detail profile</h3>
+                <h3 className="text-sm font-medium text-foreground">Client detail</h3>
               </div>
-
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">Name</p>
                   <p className="mt-1 text-sm font-medium text-foreground">{selectedClient?.name ?? "—"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Usual Order</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{insights.usualOrder}</p>
+                  <p className="text-xs text-muted-foreground">Type</p>
+                  <p className="mt-1 text-sm font-medium text-foreground capitalize">{selectedClient?.client_type ?? "—"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Preferred Delivery</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{insights.preferredDelivery}</p>
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="mt-1 text-sm text-foreground">{selectedClient?.email ?? "—"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Price Tier</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{insights.priceTier}</p>
+                  <p className="text-xs text-muted-foreground">Phone</p>
+                  <p className="mt-1 text-sm text-foreground">{selectedClient?.phone ?? "—"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3 sm:col-span-2">
                   <p className="text-xs text-muted-foreground">Sellsy ID</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{selectedClient?.id ?? "—"}</p>
+                  <p className="mt-1 text-sm font-mono text-foreground">{selectedClient?.id ?? "—"}</p>
                 </div>
               </div>
             </section>
-
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-muted-foreground" />
                 <h3 className="text-sm font-medium text-foreground">Insights</h3>
               </div>
-
               <div className="space-y-3">
                 <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
                   <Calendar className="w-4 h-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Last order date</p>
+                    <p className="text-xs text-muted-foreground">Last order</p>
                     <p className="text-sm font-medium text-foreground">{formatDate(selectedClient?.last_order_at ?? null)}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
                   <Truck className="w-4 h-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Average weekly volume</p>
-                    <p className="text-sm font-medium text-foreground">{insights.averageWeeklyVolume}</p>
+                    <p className="text-xs text-muted-foreground">Total orders</p>
+                    <p className="text-sm font-medium text-foreground">{selectedClient?.total_orders ?? "—"}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
                   <Coffee className="w-4 h-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Favorite coffees</p>
-                    <p className="text-sm font-medium text-foreground">{insights.favoriteCoffees}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
-                  <BadgeEuro className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Tracked spend</p>
+                    <p className="text-xs text-muted-foreground">Total spend</p>
                     <p className="text-sm font-medium text-foreground">
                       {typeof selectedClient?.total_spend === "number" ? `€${selectedClient.total_spend.toFixed(2)}` : "—"}
                     </p>

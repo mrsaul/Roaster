@@ -207,8 +207,7 @@ const Index = () => {
       delivery_date: deliveryDate,
       total_kg: cart.totalKg,
       total_price: cart.totalPrice,
-      status: "synced" as const,
-      sellsy_id: `SY-${Math.floor(10000 + Math.random() * 90000)}`,
+      status: "draft" as const,
     };
 
     const { data: createdOrder, error: orderError } = await supabase
