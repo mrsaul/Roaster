@@ -81,6 +81,7 @@ type AdminOrder = {
   id: string;
   user_id: string;
   user_email: string | null;
+  client_name: string | null;
   delivery_date: string;
   total_kg: number;
   total_price: number;
@@ -155,6 +156,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
+      // Fetch orders
       const { data, error } = await supabase
         .from("orders")
         .select(`
@@ -165,23 +167,34 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       if (error) throw error;
 
-      const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => ({
-        id: o.id,
-        user_id: o.user_id,
-        user_email: null,
-        delivery_date: o.delivery_date,
-        total_kg: Number(o.total_kg),
-        total_price: Number(o.total_price),
-        status: normalizeStatus(o.status),
-        sellsy_id: o.sellsy_id,
-        created_at: o.created_at,
-        items: (o.order_items ?? []).map((i: any) => ({
-          product_name: i.product_name,
-          product_sku: i.product_sku,
-          quantity: Number(i.quantity),
-          price_per_kg: Number(i.price_per_kg),
-        })),
-      }));
+      // Fetch profiles for all user_ids
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id))];
+      const { data: profiles } = userIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+        : { data: [] };
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+      const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
+        const profile = profileMap.get(o.user_id);
+        return {
+          id: o.id,
+          user_id: o.user_id,
+          user_email: profile?.email ?? null,
+          client_name: profile?.full_name || profile?.email || null,
+          delivery_date: o.delivery_date,
+          total_kg: Number(o.total_kg),
+          total_price: Number(o.total_price),
+          status: normalizeStatus(o.status),
+          sellsy_id: o.sellsy_id,
+          created_at: o.created_at,
+          items: (o.order_items ?? []).map((i: any) => ({
+            product_name: i.product_name,
+            product_sku: i.product_sku,
+            quantity: Number(i.quantity),
+            price_per_kg: Number(i.price_per_kg),
+          })),
+        };
+      });
 
       setAdminOrders(mapped);
     } catch (err) {
@@ -360,8 +373,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       result = result.filter(
         (o) =>
           o.id.toLowerCase().includes(q) ||
+          (o.client_name ?? "").toLowerCase().includes(q) ||
           (o.user_email ?? "").toLowerCase().includes(q) ||
-          o.user_id.toLowerCase().includes(q) ||
           o.items.some((i) => i.product_name.toLowerCase().includes(q)),
       );
     }
@@ -591,7 +604,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             >
                               <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
-                              <TableCell className="text-foreground text-xs">{order.user_id.slice(0, 8)}…</TableCell>
+                              <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || order.user_id.slice(0, 8) + "…"}</TableCell>
                               <TableCell className="text-muted-foreground">
                                 {order.items.length > 0
                                   ? order.items.map((i) => `${i.product_name} ×${i.quantity}`).join(", ").slice(0, 40) + (order.items.length > 2 ? "…" : "")
@@ -843,8 +856,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               {/* Info grid */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Client (user ID)</p>
-                  <p className="mt-1 text-sm font-mono text-foreground">{selectedOrder.user_id.slice(0, 16)}…</p>
+                  <p className="text-xs text-muted-foreground">Client</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedOrder.client_name || selectedOrder.user_email || "Unknown"}</p>
+                  {selectedOrder.user_email && selectedOrder.client_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{selectedOrder.user_email}</p>
+                  )}
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3">
                   <p className="text-xs text-muted-foreground">Delivery date</p>
