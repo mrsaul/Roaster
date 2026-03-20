@@ -81,6 +81,7 @@ type AdminOrder = {
   id: string;
   user_id: string;
   user_email: string | null;
+  client_name: string | null;
   delivery_date: string;
   total_kg: number;
   total_price: number;
