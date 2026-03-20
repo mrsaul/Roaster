@@ -488,6 +488,11 @@ function isCoffeeProduct(product: JsonRecord) {
 
 function extractProductPrice(product: JsonRecord) {
   const candidateValues: unknown[] = [
+    product.reference_price,
+    product.price_excl_tax,
+    product.reference_price_taxes_exc,
+    product.reference_price_taxes_inc,
+    product.purchase_amount,
     product.price,
     product.price_per_kg,
     product.unit_price,
