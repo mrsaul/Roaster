@@ -188,6 +188,9 @@ export type Database = {
       products: {
         Row: {
           created_at: string
+          custom_name: string | null
+          custom_price_per_kg: number | null
+          data_source_mode: string
           description: string | null
           id: string
           image_url: string | null
@@ -206,6 +209,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_name?: string | null
+          custom_price_per_kg?: number | null
+          data_source_mode?: string
           description?: string | null
           id?: string
           image_url?: string | null
@@ -224,6 +230,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_name?: string | null
+          custom_price_per_kg?: number | null
+          data_source_mode?: string
           description?: string | null
           id?: string
           image_url?: string | null
