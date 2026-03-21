@@ -332,6 +332,11 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                             {product.origin}
                           </span>
                         )}
+                        {product.process && (
+                          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground capitalize">
+                            {product.process}
+                          </span>
+                        )}
                       </div>
 
                       {/* Price + stepper */}
