@@ -389,8 +389,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const clientSummary = useMemo(() => ({
     totalClients: clients.length,
-    activeClients: clients.filter((c) => (c.total_orders ?? 0) > 0).length,
-    totalSpend: clients.reduce((s, c) => s + (c.total_spend ?? 0), 0),
+    activeClients: clients.filter((c) => c.onboarding_status === "completed").length,
+    pendingClients: clients.filter((c) => c.onboarding_status !== "completed").length,
   }), [clients]);
 
   const productSummary = useMemo(() => ({
