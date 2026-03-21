@@ -818,10 +818,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No products found.</TableCell></TableRow>
                         ) : (
                           products.map((product) => (
-                            <TableRow key={product.id}>
+                            <TableRow
+                              key={product.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => setSelectedProduct(product as AdminProduct)}
+                            >
                               <TableCell>
-                                <p className="font-medium text-foreground">{product.name}</p>
-                                <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
+                                <div className="flex items-center gap-3">
+                                  {product.image_url ? (
+                                    <img src={product.image_url} alt="" className="h-8 w-8 rounded object-cover border border-border" />
+                                  ) : (
+                                    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                                      <Coffee className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <p className="font-medium text-foreground">{product.name}</p>
+                                    <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
+                                  </div>
+                                </div>
                               </TableCell>
                               <TableCell className="text-muted-foreground">{product.origin ?? "—"}</TableCell>
                               <TableCell className="text-muted-foreground capitalize">{product.roast_level ?? "—"}</TableCell>
