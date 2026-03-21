@@ -8,6 +8,7 @@ import { format, formatDistanceToNow, parseISO, isToday } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
+import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,19 +26,7 @@ import {
 
 /* ─── Types ─── */
 
-type AdminClientRow = {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  country: string | null;
-  client_type: string | null;
-  total_orders: number | null;
-  total_spend: number | null;
-  last_order_at: string | null;
-};
+// AppClient type imported from AdminClientDetail
 
 type AdminProductRow = {
   id: string;
@@ -145,10 +134,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [sortAsc, setSortAsc] = useState(false);
 
   // Clients
-  const [clients, setClients] = useState<AdminClientRow[]>([]);
+  const [clients, setClients] = useState<AppClient[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
-  const [selectedClient, setSelectedClient] = useState<AdminClientRow | null>(null);
+  const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
@@ -284,12 +273,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setLoadingClients(true);
     setClientError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-        body: { mode: "list-clients" },
-      });
+      const { data, error } = await supabase
+        .from("client_onboarding")
+        .select("*")
+        .order("company_name", { ascending: true });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Unable to load clients");
-      setClients(Array.isArray(data.clients) ? data.clients : []);
+      setClients((data as AppClient[]) ?? []);
     } catch (err) {
       setClientError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -400,8 +389,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const clientSummary = useMemo(() => ({
     totalClients: clients.length,
-    activeClients: clients.filter((c) => (c.total_orders ?? 0) > 0).length,
-    totalSpend: clients.reduce((s, c) => s + (c.total_spend ?? 0), 0),
+    activeClients: clients.filter((c) => c.onboarding_status === "completed").length,
+    pendingClients: clients.filter((c) => c.onboarding_status !== "completed").length,
   }), [clients]);
 
   const productSummary = useMemo(() => ({
@@ -677,12 +666,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.totalClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Clients with orders</p>
+                    <p className="text-xs text-muted-foreground mb-2">Active clients</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.activeClients}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Tracked spend</p>
-                    <p className="text-2xl font-medium tabular-nums text-foreground">€{clientSummary.totalSpend.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground mb-2">Pending onboarding</p>
+                    <p className="text-2xl font-medium tabular-nums text-foreground">{clientSummary.pendingClients}</p>
                   </div>
                 </div>
                 <AdminClientsSection
@@ -975,75 +964,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       </Dialog>
 
       {/* ── Client detail dialog ── */}
-      <Dialog open={Boolean(selectedClient)} onOpenChange={(open) => !open && setSelectedClient(null)}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{selectedClient?.name ?? "Client profile"}</DialogTitle>
-            <DialogDescription>Sellsy client profile with delivery preferences and commercial insights.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
-            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium text-foreground">Client detail</h3>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Name</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{selectedClient?.name ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Type</p>
-                  <p className="mt-1 text-sm font-medium text-foreground capitalize">{selectedClient?.client_type ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <p className="mt-1 text-sm text-foreground">{selectedClient?.email ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Phone</p>
-                  <p className="mt-1 text-sm text-foreground">{selectedClient?.phone ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3 sm:col-span-2">
-                  <p className="text-xs text-muted-foreground">Sellsy ID</p>
-                  <p className="mt-1 text-sm font-mono text-foreground">{selectedClient?.id ?? "—"}</p>
-                </div>
-              </div>
-            </section>
-            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium text-foreground">Insights</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
-                  <Calendar className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Last order</p>
-                    <p className="text-sm font-medium text-foreground">{formatDate(selectedClient?.last_order_at ?? null)}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
-                  <Truck className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total orders</p>
-                    <p className="text-sm font-medium text-foreground">{selectedClient?.total_orders ?? "—"}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
-                  <Coffee className="w-4 h-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total spend</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {typeof selectedClient?.total_spend === "number" ? `€${selectedClient.total_spend.toFixed(2)}` : "—"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AdminClientDetail
+        client={selectedClient}
+        open={Boolean(selectedClient)}
+        onOpenChange={(open) => { if (!open) setSelectedClient(null); }}
+        onSaved={() => void loadClients()}
+      />
 
       {/* ── Product detail dialog ── */}
       <AdminProductDetail

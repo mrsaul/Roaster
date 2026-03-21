@@ -17,11 +17,18 @@ export type Database = {
       client_onboarding: {
         Row: {
           admin_notes: string | null
+          client_data_mode: string
           coffee_type: string | null
           company_name: string | null
           contact_name: string | null
           created_at: string
           current_step: number | null
+          custom_company_name: string | null
+          custom_contact_name: string | null
+          custom_delivery_address: string | null
+          custom_email: string | null
+          custom_phone: string | null
+          custom_pricing_tier: string | null
           delivery_address: string | null
           delivery_instructions: string | null
           delivery_time_window: string | null
@@ -29,6 +36,7 @@ export type Database = {
           estimated_weekly_volume: number | null
           grinder_type: string | null
           id: string
+          last_synced_at: string | null
           legal_company_name: string | null
           min_order_kg: number | null
           notes: string | null
@@ -45,11 +53,18 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          client_data_mode?: string
           coffee_type?: string | null
           company_name?: string | null
           contact_name?: string | null
           created_at?: string
           current_step?: number | null
+          custom_company_name?: string | null
+          custom_contact_name?: string | null
+          custom_delivery_address?: string | null
+          custom_email?: string | null
+          custom_phone?: string | null
+          custom_pricing_tier?: string | null
           delivery_address?: string | null
           delivery_instructions?: string | null
           delivery_time_window?: string | null
@@ -57,6 +72,7 @@ export type Database = {
           estimated_weekly_volume?: number | null
           grinder_type?: string | null
           id?: string
+          last_synced_at?: string | null
           legal_company_name?: string | null
           min_order_kg?: number | null
           notes?: string | null
@@ -73,11 +89,18 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          client_data_mode?: string
           coffee_type?: string | null
           company_name?: string | null
           contact_name?: string | null
           created_at?: string
           current_step?: number | null
+          custom_company_name?: string | null
+          custom_contact_name?: string | null
+          custom_delivery_address?: string | null
+          custom_email?: string | null
+          custom_phone?: string | null
+          custom_pricing_tier?: string | null
           delivery_address?: string | null
           delivery_instructions?: string | null
           delivery_time_window?: string | null
@@ -85,6 +108,7 @@ export type Database = {
           estimated_weekly_volume?: number | null
           grinder_type?: string | null
           id?: string
+          last_synced_at?: string | null
           legal_company_name?: string | null
           min_order_kg?: number | null
           notes?: string | null

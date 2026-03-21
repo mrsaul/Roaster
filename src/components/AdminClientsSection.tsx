@@ -1,5 +1,5 @@
 import { AlertCircle, ChevronRight, Users } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -9,41 +9,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-
-type AdminClientRow = {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  country: string | null;
-  client_type: string | null;
-  total_orders: number | null;
-  total_spend: number | null;
-  last_order_at: string | null;
-};
+import type { AppClient } from "./AdminClientDetail";
 
 interface AdminClientsSectionProps {
-  clients: AdminClientRow[];
+  clients: AppClient[];
   loading: boolean;
   error: string | null;
-  onSelectClient: (client: AdminClientRow) => void;
+  onSelectClient: (client: AppClient) => void;
 }
 
-function formatLocation(client: AdminClientRow) {
-  const parts = [client.address, client.city, client.country].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : "—";
-}
-
-function formatLastOrder(value: string | null) {
-  if (!value) return "—";
-
-  try {
-    return format(parseISO(value), "MMM d, yyyy");
-  } catch {
-    return "—";
+function resolveField(client: AppClient, field: "company_name" | "contact_name" | "email" | "phone" | "delivery_address" | "pricing_tier") {
+  if (client.client_data_mode === "custom") {
+    const customKey = `custom_${field}` as keyof AppClient;
+    const custom = client[customKey];
+    if (custom) return String(custom);
   }
+  return client[field] ?? "—";
 }
 
 export function AdminClientsSection({ clients, loading, error, onSelectClient }: AdminClientsSectionProps) {
@@ -70,54 +51,75 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient }:
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead>Name</TableHead>
+              <TableHead>Company</TableHead>
               <TableHead>Contact</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Orders</TableHead>
-              <TableHead className="text-right">Spend</TableHead>
-              <TableHead className="text-right">Last order</TableHead>
+              <TableHead>Delivery Address</TableHead>
+              <TableHead>Tier</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Source</TableHead>
               <TableHead className="text-right">Profile</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
                   Loading clients…
                 </TableCell>
               </TableRow>
             ) : clients.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-6">
                   No clients found.
                 </TableCell>
               </TableRow>
             ) : (
-              clients.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell className="font-medium text-foreground">{client.name}</TableCell>
-                  <TableCell>
-                    <div className="space-y-0.5">
-                      <p className="text-foreground">{client.email ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{client.phone ?? "—"}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{formatLocation(client)}</TableCell>
-                  <TableCell className="text-muted-foreground capitalize">{client.client_type ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums text-foreground">{client.total_orders ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums text-foreground">
-                    {typeof client.total_spend === "number" ? `€${client.total_spend.toFixed(2)}` : "—"}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">{formatLastOrder(client.last_order_at)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => onSelectClient(client)}>
-                      Open
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+              clients.map((client) => {
+                const isCustom = client.client_data_mode === "custom";
+                return (
+                  <TableRow key={client.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelectClient(client)}>
+                    <TableCell>
+                      <p className="font-medium text-foreground">{resolveField(client, "company_name")}</p>
+                      {client.sellsy_client_id && (
+                        <p className="text-xs text-muted-foreground font-mono">{client.sellsy_client_id}</p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="text-foreground">{resolveField(client, "contact_name")}</p>
+                        <p className="text-xs text-muted-foreground">{resolveField(client, "email")}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-[200px] truncate">
+                      {resolveField(client, "delivery_address")}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground capitalize">
+                      {resolveField(client, "pricing_tier")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={client.onboarding_status === "completed" ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {client.onboarding_status === "completed" ? "Active" : "Pending"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {isCustom ? (
+                        <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Sellsy</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="gap-2">
+                        Open
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
