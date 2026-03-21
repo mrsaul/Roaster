@@ -65,6 +65,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
     setTags(product.tags ?? []);
     setTastingNotes(product.tasting_notes ?? "");
     setIsActive(product.is_active);
+    setProcess(product.process ?? "");
+    setOrigin(product.origin ?? "");
     setTagInput("");
   }
 
