@@ -822,6 +822,10 @@ Deno.serve(async (req) => {
       return await handleClientList(user, accessToken);
     }
 
+    if (body?.mode === "sync-client") {
+      return await handleClientSync(user, accessToken, body);
+    }
+
     return await handleOrderSync(user, accessToken, body);
   } catch (error) {
     if (error instanceof Response) {
