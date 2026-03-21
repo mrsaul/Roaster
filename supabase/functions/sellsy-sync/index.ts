@@ -742,6 +742,57 @@ async function handleClientList(user: AuthenticatedUser, accessToken: string) {
   });
 }
 
+async function handleClientSync(user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
+  const sellsyClientId = String(body.sellsy_client_id ?? "");
+  const clientOnboardingId = String(body.client_id ?? "");
+
+  if (!sellsyClientId || !clientOnboardingId) {
+    return jsonResponse({ success: false, error: "sellsy_client_id and client_id are required" }, 400);
+  }
+
+  // Fetch this specific client from Sellsy
+  let clientData: JsonRecord | null = null;
+
+  for (const endpoint of ["/v2/companies", "/v2/contacts"]) {
+    const req = await fetchSellsy(`${endpoint}/${sellsyClientId}`, accessToken, { method: "GET" });
+    if (req.response.ok && req.payload.data && typeof req.payload.data === "object") {
+      clientData = req.payload.data as JsonRecord;
+      break;
+    }
+  }
+
+  if (!clientData) {
+    return jsonResponse({ success: false, error: `Sellsy client ${sellsyClientId} not found` }, 404);
+  }
+
+  const normalized = normalizeClient(clientData);
+  const now = new Date().toISOString();
+
+  const supabase = createServiceSupabaseClient();
+  const { error } = await supabase
+    .from("client_onboarding")
+    .update({
+      company_name: normalized.name,
+      contact_name: normalized.name,
+      email: normalized.email,
+      phone: normalized.phone,
+      delivery_address: [normalized.address, normalized.city, normalized.country].filter(Boolean).join(", ") || null,
+      last_synced_at: now,
+    })
+    .eq("id", clientOnboardingId);
+
+  if (error) {
+    throw new Error(`Failed to update client: ${error.message}`);
+  }
+
+  return jsonResponse({
+    success: true,
+    mode: "sync-client",
+    client: normalized,
+    synced_at: now,
+  });
+}
+
 async function handleOrderSync(user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
   const sellsyPayload = buildSellsyOrderPayload(body, user);
   const sellsyResponse = await createSellsyOrder(accessToken, sellsyPayload);
@@ -769,6 +820,10 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "list-clients") {
       return await handleClientList(user, accessToken);
+    }
+
+    if (body?.mode === "sync-client") {
+      return await handleClientSync(user, accessToken, body);
     }
 
     return await handleOrderSync(user, accessToken, body);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link2, Unlink2, AlertTriangle, Loader2, Clock } from "lucide-react";
+import { Link2, Unlink2, AlertTriangle, Loader2, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [deliveryAddress, setDeliveryAddress] = useState(client?.custom_delivery_address ?? client?.delivery_address ?? "");
   const [pricingTier, setPricingTier] = useState(client?.custom_pricing_tier ?? client?.pricing_tier ?? "standard");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
 
   const [lastClientId, setLastClientId] = useState<string | null>(null);
@@ -286,11 +287,40 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
               </div>
             </div>
 
-            {/* Last synced timestamp */}
-            {client.last_synced_at && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Last synced with Sellsy: {format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}
+            {/* Sync from Sellsy */}
+            {client.sellsy_client_id && (
+              <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {client.last_synced_at
+                    ? `Last synced: ${format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}`
+                    : "Never synced with Sellsy"}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={syncing}
+                  className="gap-1.5 text-xs h-7"
+                  onClick={async () => {
+                    setSyncing(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+                        body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
+                      });
+                      if (error) throw error;
+                      if (!data?.success) throw new Error(data?.error ?? "Sync failed");
+                      toast({ title: "Client synced from Sellsy" });
+                      onSaved();
+                    } catch (err) {
+                      toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+                    } finally {
+                      setSyncing(false);
+                    }
+                  }}
+                >
+                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  Sync from Sellsy
+                </Button>
               </div>
             )}
 
