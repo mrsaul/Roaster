@@ -50,6 +50,9 @@ type AdminProductRow = {
   price_per_kg: number;
   is_active: boolean;
   synced_at: string;
+  image_url: string | null;
+  tags: string[];
+  tasting_notes: string | null;
 };
 
 type ProductParseError = {
