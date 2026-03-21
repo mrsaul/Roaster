@@ -153,6 +153,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [runningProductSync, setRunningProductSync] = useState(false);
   const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   const [syncRunError, setSyncRunError] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
 
   const { toast } = useToast();
 
