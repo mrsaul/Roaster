@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_onboarding: {
+        Row: {
+          admin_notes: string | null
+          coffee_type: string | null
+          company_name: string | null
+          contact_name: string | null
+          created_at: string
+          current_step: number | null
+          delivery_address: string | null
+          delivery_instructions: string | null
+          delivery_time_window: string | null
+          email: string | null
+          estimated_weekly_volume: number | null
+          grinder_type: string | null
+          id: string
+          legal_company_name: string | null
+          min_order_kg: number | null
+          notes: string | null
+          onboarding_status: string | null
+          payment_terms: string | null
+          phone: string | null
+          preferred_delivery_days: string[] | null
+          pricing_tier: string | null
+          sellsy_client_id: string | null
+          siret: string | null
+          updated_at: string
+          user_id: string
+          vat_number: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          coffee_type?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          current_step?: number | null
+          delivery_address?: string | null
+          delivery_instructions?: string | null
+          delivery_time_window?: string | null
+          email?: string | null
+          estimated_weekly_volume?: number | null
+          grinder_type?: string | null
+          id?: string
+          legal_company_name?: string | null
+          min_order_kg?: number | null
+          notes?: string | null
+          onboarding_status?: string | null
+          payment_terms?: string | null
+          phone?: string | null
+          preferred_delivery_days?: string[] | null
+          pricing_tier?: string | null
+          sellsy_client_id?: string | null
+          siret?: string | null
+          updated_at?: string
+          user_id: string
+          vat_number?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          coffee_type?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          current_step?: number | null
+          delivery_address?: string | null
+          delivery_instructions?: string | null
+          delivery_time_window?: string | null
+          email?: string | null
+          estimated_weekly_volume?: number | null
+          grinder_type?: string | null
+          id?: string
+          legal_company_name?: string | null
+          min_order_kg?: number | null
+          notes?: string | null
+          onboarding_status?: string | null
+          payment_terms?: string | null
+          phone?: string | null
+          preferred_delivery_days?: string[] | null
+          pricing_tier?: string | null
+          sellsy_client_id?: string | null
+          siret?: string | null
+          updated_at?: string
+          user_id?: string
+          vat_number?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string
