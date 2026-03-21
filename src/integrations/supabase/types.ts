@@ -190,6 +190,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          image_url: string | null
           is_active: boolean
           name: string
           origin: string | null
@@ -198,12 +199,15 @@ export type Database = {
           sellsy_id: string
           sku: string | null
           synced_at: string
+          tags: string[] | null
+          tasting_notes: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name: string
           origin?: string | null
@@ -212,12 +216,15 @@ export type Database = {
           sellsy_id: string
           sku?: string | null
           synced_at?: string
+          tags?: string[] | null
+          tasting_notes?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           description?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean
           name?: string
           origin?: string | null
@@ -226,6 +233,8 @@ export type Database = {
           sellsy_id?: string
           sku?: string | null
           synced_at?: string
+          tags?: string[] | null
+          tasting_notes?: string | null
           updated_at?: string
         }
         Relationships: []

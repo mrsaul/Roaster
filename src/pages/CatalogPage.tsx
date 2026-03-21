@@ -61,6 +61,9 @@ const mapProductRow = (product: ProductRow): Product => ({
   roastLevel: normalizeRoastLevel(product.roast_level),
   available: product.is_active,
   description: product.description ?? undefined,
+  imageUrl: (product as any).image_url ?? null,
+  tags: (product as any).tags ?? [],
+  tastingNotes: (product as any).tasting_notes ?? null,
 });
 
 
@@ -82,7 +85,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
 
     const { data, error } = await supabase
       .from("products")
-      .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active")
+      .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes")
       .eq("is_active", true)
       .order("name", { ascending: true });
 
@@ -107,7 +110,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
 
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes")
         .eq("is_active", true)
         .order("name", { ascending: true });
 
@@ -269,51 +272,81 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                   }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm">
-                    {/* Header: name + roast badge */}
-                    <div className="space-y-1.5">
-                      <h3 className="text-base font-semibold leading-snug text-foreground">
-                        {product.name}
-                      </h3>
-                      {product.description && (
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                          {product.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Detail chips */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {product.roastLevel && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                          <Coffee className="h-3 w-3" />
-                          {product.roastLevel.charAt(0).toUpperCase() + product.roastLevel.slice(1)}
-                        </span>
-                      )}
-                      {product.origin && product.origin !== "Unknown origin" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {product.origin}
-                        </span>
-                      )}
-                      <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-mono tabular-nums text-secondary-foreground">
-                        SKU {product.sku}
-                      </span>
-                    </div>
-
-                    {/* Price + stepper */}
-                    <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-                      <div>
-                        <span className="text-lg font-semibold tabular-nums text-foreground">
-                          €{product.pricePerKg.toFixed(2)}
-                        </span>
-                        <span className="ml-1 text-xs text-muted-foreground">/kg</span>
-                        <p className="text-[11px] text-muted-foreground">3 kg units</p>
+                  <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                    {/* Product image */}
+                    {product.imageUrl && (
+                      <div className="aspect-square w-full">
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
                       </div>
-                      <QuantityStepper
-                        value={cart.getQuantity(product.id)}
-                        onChange={(qty) => cart.updateQuantity(product, qty)}
-                      />
+                    )}
+
+                    <div className="p-4 space-y-3">
+                      {/* Header: name + description */}
+                      <div className="space-y-1.5">
+                        <h3 className="text-base font-semibold leading-snug text-foreground">
+                          {product.name}
+                        </h3>
+                        {product.tastingNotes && (
+                          <p className="text-sm italic text-muted-foreground">
+                            {product.tastingNotes}
+                          </p>
+                        )}
+                        {product.description && !product.tastingNotes && (
+                          <p className="text-sm leading-relaxed text-muted-foreground">
+                            {product.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Tags */}
+                      {product.tags && product.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {product.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Detail chips */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {product.roastLevel && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                            <Coffee className="h-3 w-3" />
+                            {product.roastLevel.charAt(0).toUpperCase() + product.roastLevel.slice(1)}
+                          </span>
+                        )}
+                        {product.origin && product.origin !== "Unknown origin" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {product.origin}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Price + stepper */}
+                      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                        <div>
+                          <span className="text-lg font-semibold tabular-nums text-foreground">
+                            €{product.pricePerKg.toFixed(2)}
+                          </span>
+                          <span className="ml-1 text-xs text-muted-foreground">/kg</span>
+                          <p className="text-[11px] text-muted-foreground">3 kg units</p>
+                        </div>
+                        <QuantityStepper
+                          value={cart.getQuantity(product.id)}
+                          onChange={(qty) => cart.updateQuantity(product, qty)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </motion.div>

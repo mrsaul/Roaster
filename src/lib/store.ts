@@ -9,6 +9,9 @@ export interface Product {
   roastLevel: "light" | "medium" | "dark" | "espresso";
   available: boolean;
   description?: string;
+  imageUrl?: string | null;
+  tags?: string[];
+  tastingNotes?: string | null;
 }
 
 export interface CartItem {
