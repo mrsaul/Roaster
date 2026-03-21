@@ -173,11 +173,46 @@ export type Database = {
           },
         ]
       }
+      order_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          id: string
+          order_id: string
+          status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          id?: string
+          order_id: string
+          status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          id?: string
+          order_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           created_at: string
           delivery_date: string
           id: string
+          is_labeled: boolean
+          is_packed: boolean
+          is_roasted: boolean
           sellsy_id: string | null
           status: string
           total_kg: number
@@ -189,6 +224,9 @@ export type Database = {
           created_at?: string
           delivery_date: string
           id?: string
+          is_labeled?: boolean
+          is_packed?: boolean
+          is_roasted?: boolean
           sellsy_id?: string | null
           status?: string
           total_kg?: number
@@ -200,6 +238,9 @@ export type Database = {
           created_at?: string
           delivery_date?: string
           id?: string
+          is_labeled?: boolean
+          is_packed?: boolean
+          is_roasted?: boolean
           sellsy_id?: string | null
           status?: string
           total_kg?: number
