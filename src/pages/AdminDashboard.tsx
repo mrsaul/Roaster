@@ -273,12 +273,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setLoadingClients(true);
     setClientError(null);
     try {
-      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-        body: { mode: "list-clients" },
-      });
+      const { data, error } = await supabase
+        .from("client_onboarding")
+        .select("*")
+        .order("company_name", { ascending: true });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Unable to load clients");
-      setClients(Array.isArray(data.clients) ? data.clients : []);
+      setClients((data as AppClient[]) ?? []);
     } catch (err) {
       setClientError(err instanceof Error ? err.message : String(err));
     } finally {
