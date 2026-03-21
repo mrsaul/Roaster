@@ -111,7 +111,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
 
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes, process")
         .eq("is_active", true)
         .order("name", { ascending: true });
 
