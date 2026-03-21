@@ -53,6 +53,7 @@ type AdminProductRow = {
   image_url: string | null;
   tags: string[];
   tasting_notes: string | null;
+  process: string | null;
 };
 
 type ProductParseError = {
