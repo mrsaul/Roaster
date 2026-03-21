@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { X, Upload, Plus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
