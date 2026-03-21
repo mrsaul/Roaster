@@ -5,9 +5,10 @@ import CatalogPage from "./CatalogPage";
 import CheckoutPage from "./CheckoutPage";
 import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
+import OnboardingPage from "./OnboardingPage";
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "home" | "shop" | "checkout" | "orders" | "admin";
+type View = "home" | "shop" | "checkout" | "orders" | "admin" | "onboarding";
 type AppRole = "admin" | "user";
 
 type PersistedOrderRow = {
@@ -72,6 +73,7 @@ const Index = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [draftDeliveryDate, setDraftDeliveryDate] = useState<string | null>(null);
+  const [onboardingData, setOnboardingData] = useState<Record<string, unknown> | null>(null);
   const cart = useCart();
   const { clearCart } = cart;
 
@@ -121,9 +123,23 @@ const Index = () => {
 
     const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
     setRole(normalizedRole);
-    setView(normalizedRole === "admin" ? "admin" : "home");
 
-    if (normalizedRole === "user") {
+    if (normalizedRole === "admin") {
+      setView("admin");
+      return;
+    }
+
+    // Check onboarding status for regular users
+    const { data: onboarding } = await supabase
+      .from("client_onboarding")
+      .select("*")
+      .maybeSingle();
+
+    if (!onboarding || onboarding.onboarding_status !== "completed") {
+      setOnboardingData(onboarding as Record<string, unknown> | null);
+      setView("onboarding");
+    } else {
+      setView("home");
       await loadOrders();
     }
   }, [loadOrders]);
@@ -274,6 +290,16 @@ const Index = () => {
   }
 
   switch (view) {
+    case "onboarding":
+      return (
+        <OnboardingPage
+          existingData={onboardingData as any}
+          onComplete={async () => {
+            setView("home");
+            await loadOrders();
+          }}
+        />
+      );
     case "home":
       return (
         <CatalogPage
