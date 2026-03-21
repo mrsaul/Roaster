@@ -51,6 +51,8 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
   const [tags, setTags] = useState<string[]>(product?.tags ?? []);
   const [tastingNotes, setTastingNotes] = useState(product?.tasting_notes ?? "");
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
+  const [process, setProcess] = useState(product?.process ?? "");
+  const [origin, setOrigin] = useState(product?.origin ?? "");
   const [tagInput, setTagInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
