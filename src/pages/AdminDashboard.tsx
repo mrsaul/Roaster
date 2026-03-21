@@ -236,16 +236,28 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       await changeOrderStatus(order.id, "approved");
 
+      // Lookup sellsy_client_id from client_onboarding
+      const { data: clientRow } = await supabase
+        .from("client_onboarding")
+        .select("sellsy_client_id")
+        .eq("user_id", order.user_id)
+        .maybeSingle();
+
       const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
         body: {
           mode: "create-order",
           orderId: order.id,
+          deliveryDate: order.delivery_date,
+          createdAt: order.created_at,
+          sellsy_client_id: clientRow?.sellsy_client_id ?? null,
           items: order.items.map((i) => ({
             name: i.product_name,
+            sku: i.product_sku,
             quantity: i.quantity,
-            unitPrice: i.price_per_kg,
+            pricePerKg: i.price_per_kg,
           })),
-          totalAmount: order.total_price,
+          totalKg: order.total_kg,
+          totalPrice: order.total_price,
         },
       });
 

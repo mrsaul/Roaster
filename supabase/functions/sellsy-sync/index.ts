@@ -663,33 +663,28 @@ async function logSyncRun(params: {
 
 function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): JsonRecord {
   const items = Array.isArray(body.items) ? (body.items as SellsyOrderLine[]) : [];
+  const sellsyClientId = body.sellsy_client_id as string | undefined;
 
-  return {
+  const payload: JsonRecord = {
     source: "PluralRoaster",
-    external_reference: body.orderId,
-    ordered_at: body.createdAt,
+    external_reference: String(body.orderId ?? ""),
+    ordered_at: body.createdAt ?? new Date().toISOString(),
     delivery_date: body.deliveryDate,
-    customer: body.customer ?? {
-      email: user.email,
-    },
-    notes: body.notes ?? null,
-    lines: items.map((item) => ({
-      sku: item.sku,
-      name: item.name,
-      quantity: item.quantity,
-      unit: "kg",
-      unit_price: item.pricePerKg,
-      total_price: item.totalPrice,
+    notes: body.notes ?? "",
+    related: sellsyClientId
+      ? [{ type: "company", id: Number(sellsyClientId) }]
+      : [],
+    rows: items.map((item) => ({
+      type: "item",
+      reference: item.sku ?? "",
+      description: item.name ?? "",
+      quantity: String(item.quantity ?? 1),
+      unit_amount: String(item.pricePerKg ?? 0),
+      tax_id: null,
     })),
-    totals: {
-      total_kg: body.totalKg,
-      total_price: body.totalPrice,
-    },
-    metadata: {
-      user_id: user.userId,
-      app: "PluralRoaster",
-    },
   };
+
+  return payload;
 }
 
 async function handleProductSync(user: AuthenticatedUser, accessToken: string) {
