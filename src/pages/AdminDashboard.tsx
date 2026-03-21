@@ -54,6 +54,9 @@ type AdminProductRow = {
   tags: string[];
   tasting_notes: string | null;
   process: string | null;
+  data_source_mode: string;
+  custom_name: string | null;
+  custom_price_per_kg: number | null;
 };
 
 type ProductParseError = {
@@ -301,7 +304,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg")
         .order("name", { ascending: true });
       if (error) throw new Error(error.message);
       setProducts((data as AdminProductRow[]) ?? []);
@@ -818,7 +821,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         ) : products.length === 0 ? (
                           <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No products found.</TableCell></TableRow>
                         ) : (
-                          products.map((product) => (
+                          products.map((product) => {
+                            const isCustom = product.data_source_mode === "custom";
+                            const displayName = isCustom && product.custom_name ? product.custom_name : product.name;
+                            const displayPrice = isCustom && product.custom_price_per_kg != null ? product.custom_price_per_kg : product.price_per_kg;
+                            return (
                             <TableRow
                               key={product.id}
                               className="cursor-pointer hover:bg-muted/50"
@@ -834,7 +841,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     </div>
                                   )}
                                   <div>
-                                    <p className="font-medium text-foreground">{product.name}</p>
+                                    <p className="font-medium text-foreground">{displayName}</p>
                                     <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
                                   </div>
                                 </div>
@@ -842,10 +849,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <TableCell className="text-muted-foreground">{product.origin ?? "—"}</TableCell>
                               <TableCell className="text-muted-foreground capitalize">{product.roast_level ?? "—"}</TableCell>
                               <TableCell className="font-mono text-foreground">{product.sku ?? "—"}</TableCell>
-                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{product.price_per_kg.toFixed(2)}/kg</TableCell>
-                              <TableCell className="text-right text-muted-foreground">{product.is_active ? "Active" : "Archived"}</TableCell>
+                              <TableCell className="text-right tabular-nums text-foreground font-medium">€{displayPrice.toFixed(2)}/kg</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  {isCustom && (
+                                    <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                                  )}
+                                  <span className="text-muted-foreground">{product.is_active ? "Active" : "Archived"}</span>
+                                </div>
+                              </TableCell>
                             </TableRow>
-                          ))
+                            );
+                          })
                         )}
                       </TableBody>
                     </Table>
