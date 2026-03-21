@@ -1028,6 +1028,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Product detail dialog ── */}
+      <AdminProductDetail
+        product={selectedProduct}
+        open={Boolean(selectedProduct)}
+        onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
+        onSaved={() => void loadProducts()}
+      />
     </>
   );
 }
