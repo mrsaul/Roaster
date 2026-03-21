@@ -123,9 +123,23 @@ const Index = () => {
 
     const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
     setRole(normalizedRole);
-    setView(normalizedRole === "admin" ? "admin" : "home");
 
-    if (normalizedRole === "user") {
+    if (normalizedRole === "admin") {
+      setView("admin");
+      return;
+    }
+
+    // Check onboarding status for regular users
+    const { data: onboarding } = await supabase
+      .from("client_onboarding")
+      .select("*")
+      .maybeSingle();
+
+    if (!onboarding || onboarding.onboarding_status !== "completed") {
+      setOnboardingData(onboarding as Record<string, unknown> | null);
+      setView("onboarding");
+    } else {
+      setView("home");
       await loadOrders();
     }
   }, [loadOrders]);
