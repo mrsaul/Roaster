@@ -12,6 +12,7 @@ export interface Product {
   imageUrl?: string | null;
   tags?: string[];
   tastingNotes?: string | null;
+  process?: string | null;
 }
 
 export interface CartItem {
