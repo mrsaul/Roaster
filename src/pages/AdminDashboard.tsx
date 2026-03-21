@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-  LogOut, Users, Package, Coffee, BarChart3, BadgeEuro, Receipt,
-  ExternalLink, Download, RefreshCw, AlertCircle, CheckCircle2, Clock3,
-  Truck, Calendar, ChevronRight, Search, X, Check, Send, RotateCcw,
+  LogOut, Users, Package, Coffee, BadgeEuro,
+  RefreshCw, AlertCircle, CheckCircle2, Clock3,
+  Calendar, Search, X, Check, Send, RotateCcw, Truck,
 } from "lucide-react";
-import { format, formatDistanceToNow, parseISO, isToday } from "date-fns";
+import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
+import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
+import {
+  ORDER_STATUSES, ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
+  normalizeOrderStatus, type OrderStatus,
+} from "@/lib/orderStatuses";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +30,6 @@ import {
 } from "@/components/ui/select";
 
 /* ─── Types ─── */
-
-// AppClient type imported from AdminClientDetail
 
 type AdminProductRow = {
   id: string;
@@ -65,8 +68,6 @@ type SyncRunRow = {
   created_at: string;
 };
 
-type OrderStatus = "draft" | "approved" | "sent_to_sellsy" | "error";
-
 type AdminOrderItem = {
   product_name: string;
   product_sku: string | null;
@@ -85,6 +86,9 @@ type AdminOrder = {
   status: OrderStatus;
   sellsy_id: string | null;
   created_at: string;
+  is_roasted: boolean;
+  is_packed: boolean;
+  is_labeled: boolean;
   items: AdminOrderItem[];
 };
 
@@ -100,30 +104,10 @@ function formatDate(value: string | null) {
   try { return format(parseISO(value), "MMM d, yyyy"); } catch { return "—"; }
 }
 
-const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  draft: "Draft",
-  approved: "Approved",
-  sent_to_sellsy: "Sent to Sellsy",
-  error: "Error",
-};
-
-const ORDER_STATUS_CLASS: Record<OrderStatus, string> = {
-  draft: "bg-primary/10 text-primary border-primary/20",
-  approved: "bg-accent text-accent-foreground border-border",
-  sent_to_sellsy: "bg-success/10 text-success border-success/20",
-  error: "bg-destructive/10 text-destructive border-destructive/20",
-};
-
-function normalizeStatus(raw: string): OrderStatus {
-  if (raw === "draft" || raw === "approved" || raw === "sent_to_sellsy" || raw === "error") return raw;
-  if (raw === "synced" || raw === "fulfilled" || raw === "confirmed") return "sent_to_sellsy";
-  return "draft";
-}
-
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "clients" | "products">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "clients" | "products">("orders");
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
@@ -154,18 +138,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const loadOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
-      // Fetch orders
       const { data, error } = await supabase
         .from("orders")
         .select(`
           id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
+          is_roasted, is_packed, is_labeled,
           order_items ( product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Fetch profiles for all user_ids
       const userIds = [...new Set((data ?? []).map((o: any) => o.user_id))];
       const { data: profiles } = userIds.length > 0
         ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
@@ -182,9 +165,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           delivery_date: o.delivery_date,
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
-          status: normalizeStatus(o.status),
+          status: normalizeOrderStatus(o.status),
           sellsy_id: o.sellsy_id,
           created_at: o.created_at,
+          is_roasted: Boolean(o.is_roasted),
+          is_packed: Boolean(o.is_packed),
+          is_labeled: Boolean(o.is_labeled),
           items: (o.order_items ?? []).map((i: any) => ({
             product_name: i.product_name,
             product_sku: i.product_sku,
@@ -202,18 +188,53 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [toast]);
 
-  /* ── Approve order ── */
+  /* ── Change order status ── */
+  const changeOrderStatus = useCallback(async (orderId: string, newStatus: OrderStatus) => {
+    try {
+      const { error: updateErr } = await supabase
+        .from("orders")
+        .update({ status: newStatus })
+        .eq("id", orderId);
+      if (updateErr) throw updateErr;
+
+      // Log status history
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("order_status_history").insert({
+          order_id: orderId,
+          status: newStatus,
+          changed_by: user.id,
+        });
+      }
+
+      setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
+      toast({ title: `Status → ${ORDER_STATUS_LABEL[newStatus]}` });
+    } catch (err) {
+      toast({ title: "Status update failed", description: String(err), variant: "destructive" });
+    }
+  }, [toast]);
+
+  /* ── Update checklist ── */
+  const updateChecklist = useCallback(async (orderId: string, field: "is_roasted" | "is_packed" | "is_labeled", value: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ [field]: value })
+        .eq("id", orderId);
+      if (error) throw error;
+
+      setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
+    } catch (err) {
+      toast({ title: "Checklist update failed", description: String(err), variant: "destructive" });
+    }
+  }, [toast]);
+
+  /* ── Approve order (with Sellsy sync) ── */
   const approveOrder = useCallback(async (order: AdminOrder) => {
     setApprovingIds((prev) => new Set(prev).add(order.id));
     try {
-      // 1. Set status to approved
-      const { error: updateErr } = await supabase
-        .from("orders")
-        .update({ status: "approved" })
-        .eq("id", order.id);
-      if (updateErr) throw updateErr;
+      await changeOrderStatus(order.id, "approved");
 
-      // 2. Call Sellsy sync to create invoice
       const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
         body: {
           mode: "create-order",
@@ -228,23 +249,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       });
 
       if (sellsyErr || !sellsyResult?.success) {
-        // Mark as error
-        await supabase.from("orders").update({ status: "error" }).eq("id", order.id);
         toast({
           title: "Sellsy sync failed",
           description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
           variant: "destructive",
         });
       } else {
-        // Success → sent_to_sellsy
         await supabase
           .from("orders")
-          .update({
-            status: "sent_to_sellsy",
-            sellsy_id: sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null,
-          })
+          .update({ sellsy_id: sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null })
           .eq("id", order.id);
-        toast({ title: "Order approved & sent to Sellsy" });
       }
 
       await loadOrders();
@@ -257,14 +271,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return next;
       });
     }
-  }, [loadOrders, toast]);
+  }, [changeOrderStatus, loadOrders, toast]);
 
   /* ── Bulk approve ── */
-  const approveAllDrafts = useCallback(async () => {
-    const drafts = adminOrders.filter((o) => o.status === "draft");
-    if (drafts.length === 0) return;
-    for (const draft of drafts) {
-      await approveOrder(draft);
+  const approveAllReceived = useCallback(async () => {
+    const received = adminOrders.filter((o) => o.status === "received");
+    if (received.length === 0) return;
+    for (const r of received) {
+      await approveOrder(r);
     }
   }, [adminOrders, approveOrder]);
 
@@ -356,9 +370,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       try { return isToday(parseISO(o.created_at)); } catch { return false; }
     });
     const totalKg = adminOrders.reduce((s, o) => s + o.total_kg, 0);
-    const pendingApproval = adminOrders.filter((o) => o.status === "draft").length;
-    const errorCount = adminOrders.filter((o) => o.status === "error").length;
-    return { todayCount: todayOrders.length, totalKg, pendingApproval, errorCount };
+    const receivedCount = adminOrders.filter((o) => o.status === "received").length;
+    const packagingCount = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
+    const deliveryTodayCount = adminOrders.filter((o) => {
+      try { return isToday(parseISO(o.delivery_date)); } catch { return false; }
+    }).length;
+    return { todayCount: todayOrders.length, totalKg, receivedCount, packagingCount, deliveryTodayCount };
   }, [adminOrders]);
 
   const filteredOrders = useMemo(() => {
@@ -385,7 +402,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     return result;
   }, [adminOrders, statusFilter, searchQuery, sortField, sortAsc]);
 
-  const draftCount = adminOrders.filter((o) => o.status === "draft").length;
+  const receivedCount = adminOrders.filter((o) => o.status === "received").length;
+  const packagingBadge = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
 
   const clientSummary = useMemo(() => ({
     totalClients: clients.length,
@@ -407,14 +425,36 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     else { setSortField(field); setSortAsc(false); }
   };
 
-  const sectionLabel = activeSection === "orders" ? "Orders" : activeSection === "products" ? "Products" : "Clients";
+  const sectionLabels: Record<string, string> = {
+    orders: "Orders",
+    packaging: "Packaging",
+    clients: "Clients",
+    products: "Products",
+  };
 
   /* ── Sidebar nav items ── */
   const navItems = [
-    { key: "orders" as const, icon: Package, label: "Orders", badge: draftCount > 0 ? draftCount : null },
-    { key: "clients" as const, icon: Users, label: "Clients" },
-    { key: "products" as const, icon: Coffee, label: "Products" },
+    { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
+    { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+    { key: "clients" as const, icon: Users, label: "Clients", badge: null },
+    { key: "products" as const, icon: Coffee, label: "Products", badge: null },
   ];
+
+  /* ── Packaging orders mapped ── */
+  const packagingOrders: PackagingOrder[] = useMemo(() =>
+    adminOrders.map((o) => ({
+      id: o.id,
+      client_name: o.client_name,
+      delivery_date: o.delivery_date,
+      total_kg: o.total_kg,
+      status: o.status,
+      is_roasted: o.is_roasted,
+      is_packed: o.is_packed,
+      is_labeled: o.is_labeled,
+      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+    })),
+    [adminOrders],
+  );
 
   return (
     <>
@@ -456,7 +496,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
                 <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
-                <p className="text-xs text-muted-foreground">{sectionLabel}</p>
+                <p className="text-xs text-muted-foreground">{sectionLabels[activeSection]}</p>
               </div>
               <div className="flex items-center gap-2">
                 {navItems.map((item) => (
@@ -486,25 +526,31 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {activeSection === "orders" && (
               <section className="space-y-6">
                 {/* Stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <div className="bg-card border border-border rounded-lg p-4">
                     <p className="text-xs text-muted-foreground mb-2">Orders today</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{stats.todayCount}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Total kg ordered</p>
+                    <p className="text-xs text-muted-foreground mb-2">Total kg</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{stats.totalKg.toFixed(0)}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Pending approval</p>
-                    <p className={cn("text-2xl font-medium tabular-nums", stats.pendingApproval > 0 ? "text-primary" : "text-foreground")}>
-                      {stats.pendingApproval}
+                    <p className="text-xs text-muted-foreground mb-2">Received</p>
+                    <p className={cn("text-2xl font-medium tabular-nums", stats.receivedCount > 0 ? "text-primary" : "text-foreground")}>
+                      {stats.receivedCount}
                     </p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Errors</p>
-                    <p className={cn("text-2xl font-medium tabular-nums", stats.errorCount > 0 ? "text-destructive" : "text-foreground")}>
-                      {stats.errorCount}
+                    <p className="text-xs text-muted-foreground mb-2">In packaging</p>
+                    <p className={cn("text-2xl font-medium tabular-nums", stats.packagingCount > 0 ? "text-warning" : "text-foreground")}>
+                      {stats.packagingCount}
+                    </p>
+                  </div>
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Delivery today</p>
+                    <p className={cn("text-2xl font-medium tabular-nums", stats.deliveryTodayCount > 0 ? "text-info" : "text-foreground")}>
+                      {stats.deliveryTodayCount}
                     </p>
                   </div>
                 </div>
@@ -527,15 +573,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       )}
                     </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-44">
+                      <SelectTrigger className="w-52">
                         <SelectValue placeholder="Filter by status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="sent_to_sellsy">Sent to Sellsy</SelectItem>
-                        <SelectItem value="error">Error</SelectItem>
+                        {ORDER_STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -544,14 +589,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
                       <RefreshCw className="w-4 h-4" /> Refresh
                     </Button>
-                    {draftCount > 0 && (
+                    {receivedCount > 0 && (
                       <Button
                         size="sm"
                         className="gap-2"
-                        onClick={() => void approveAllDrafts()}
+                        onClick={() => void approveAllReceived()}
                         disabled={approvingIds.size > 0}
                       >
-                        <Send className="w-4 h-4" /> Approve all ({draftCount})
+                        <Send className="w-4 h-4" /> Approve all ({receivedCount})
                       </Button>
                     )}
                   </div>
@@ -565,7 +610,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableHead>Order ID</TableHead>
                           <TableHead className="cursor-pointer select-none" onClick={() => handleSort("created_at")}>
-                            Order Date {sortField === "created_at" && (sortAsc ? "↑" : "↓")}
+                            Date {sortField === "created_at" && (sortAsc ? "↑" : "↓")}
                           </TableHead>
                           <TableHead>Client</TableHead>
                           <TableHead>Items</TableHead>
@@ -595,8 +640,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               key={order.id}
                               className={cn(
                                 "cursor-pointer transition-colors",
-                                order.status === "draft" && "bg-primary/[0.03]",
-                                order.status === "error" && "bg-destructive/[0.03]",
+                                order.status === "received" && "bg-primary/[0.03]",
                               )}
                               onClick={() => setSelectedOrder(order)}
                             >
@@ -611,13 +655,28 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <TableCell className="text-right tabular-nums text-foreground">{order.total_kg.toFixed(0)} kg</TableCell>
                               <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d")}</TableCell>
-                              <TableCell>
-                                <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[order.status])}>
-                                  {ORDER_STATUS_LABEL[order.status]}
-                                </span>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Select
+                                  value={order.status}
+                                  onValueChange={(val) => void changeOrderStatus(order.id, val as OrderStatus)}
+                                >
+                                  <SelectTrigger className={cn("h-7 w-auto min-w-[130px] text-xs border rounded-full px-2.5", ORDER_STATUS_CLASS[order.status])}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {ORDER_STATUSES.map((s) => (
+                                      <SelectItem key={s} value={s}>
+                                        <span className={cn("inline-flex items-center gap-1.5")}>
+                                          <span className={cn("w-2 h-2 rounded-full", ORDER_STATUS_CLASS[s].split(" ")[0])} />
+                                          {ORDER_STATUS_LABEL[s]}
+                                        </span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                {order.status === "draft" && (
+                                {order.status === "received" && (
                                   <Button
                                     size="sm"
                                     className="gap-1.5"
@@ -632,18 +691,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     Approve
                                   </Button>
                                 )}
-                                {order.status === "error" && (
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="gap-1.5"
-                                    disabled={approvingIds.has(order.id)}
-                                    onClick={() => void approveOrder(order)}
-                                  >
-                                    <RotateCcw className="w-3.5 h-3.5" /> Retry
-                                  </Button>
-                                )}
-                                {order.status === "sent_to_sellsy" && order.sellsy_id && (
+                                {order.sellsy_id && (
                                   <span className="text-xs font-mono text-muted-foreground">{order.sellsy_id}</span>
                                 )}
                               </TableCell>
@@ -655,6 +703,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
               </section>
+            )}
+
+            {/* ═══════════ PACKAGING ═══════════ */}
+            {activeSection === "packaging" && (
+              <PackagingView
+                orders={packagingOrders}
+                onStatusChange={(orderId, newStatus) => void changeOrderStatus(orderId, newStatus)}
+                onChecklistChange={(orderId, field, value) => void updateChecklist(orderId, field, value)}
+              />
             )}
 
             {/* ═══════════ CLIENTS ═══════════ */}
@@ -895,12 +952,60 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <p className="text-xs text-muted-foreground">Order date</p>
                   <p className="mt-1 text-sm text-foreground">{format(parseISO(selectedOrder.created_at), "MMM d, yyyy HH:mm")}</p>
                 </div>
-                {selectedOrder.sellsy_id && (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-xs text-muted-foreground">Sellsy ID</p>
-                    <p className="mt-1 text-sm font-mono text-foreground">{selectedOrder.sellsy_id}</p>
-                  </div>
-                )}
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">Change status</p>
+                  <Select
+                    value={selectedOrder.status}
+                    onValueChange={(val) => {
+                      void changeOrderStatus(selectedOrder.id, val as OrderStatus);
+                      setSelectedOrder({ ...selectedOrder, status: val as OrderStatus });
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ORDER_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>{ORDER_STATUS_LABEL[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Checklist */}
+              <div className="rounded-lg bg-muted/40 p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Preparation checklist</p>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={selectedOrder.is_roasted}
+                    onCheckedChange={(v) => {
+                      void updateChecklist(selectedOrder.id, "is_roasted", Boolean(v));
+                      setSelectedOrder({ ...selectedOrder, is_roasted: Boolean(v) });
+                    }}
+                  />
+                  <span className={cn(selectedOrder.is_roasted && "line-through text-muted-foreground")}>Roasted</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={selectedOrder.is_packed}
+                    onCheckedChange={(v) => {
+                      void updateChecklist(selectedOrder.id, "is_packed", Boolean(v));
+                      setSelectedOrder({ ...selectedOrder, is_packed: Boolean(v) });
+                    }}
+                  />
+                  <span className={cn(selectedOrder.is_packed && "line-through text-muted-foreground")}>Packed</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={selectedOrder.is_labeled}
+                    onCheckedChange={(v) => {
+                      void updateChecklist(selectedOrder.id, "is_labeled", Boolean(v));
+                      setSelectedOrder({ ...selectedOrder, is_labeled: Boolean(v) });
+                    }}
+                  />
+                  <span className={cn(selectedOrder.is_labeled && "line-through text-muted-foreground")}>Labeled</span>
+                </label>
               </div>
 
               {/* Items table */}
@@ -940,7 +1045,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </div>
 
               {/* Actions */}
-              {(selectedOrder.status === "draft" || selectedOrder.status === "error") && (
+              {selectedOrder.status === "received" && (
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
                     className="gap-2"
@@ -950,11 +1055,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       setSelectedOrder(null);
                     }}
                   >
-                    {selectedOrder.status === "error" ? (
-                      <><RotateCcw className="w-4 h-4" /> Retry & Send to Sellsy</>
-                    ) : (
-                      <><Check className="w-4 h-4" /> Approve & Send to Sellsy</>
-                    )}
+                    <Check className="w-4 h-4" /> Approve & Send to Sellsy
                   </Button>
                 </div>
               )}
