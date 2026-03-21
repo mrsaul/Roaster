@@ -61,6 +61,9 @@ const mapProductRow = (product: ProductRow): Product => ({
   roastLevel: normalizeRoastLevel(product.roast_level),
   available: product.is_active,
   description: product.description ?? undefined,
+  imageUrl: (product as any).image_url ?? null,
+  tags: (product as any).tags ?? [],
+  tastingNotes: (product as any).tasting_notes ?? null,
 });
 
 
