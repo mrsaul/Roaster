@@ -290,6 +290,16 @@ const Index = () => {
   }
 
   switch (view) {
+    case "onboarding":
+      return (
+        <OnboardingPage
+          existingData={onboardingData as any}
+          onComplete={async () => {
+            setView("home");
+            await loadOrders();
+          }}
+        />
+      );
     case "home":
       return (
         <CatalogPage
