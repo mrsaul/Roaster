@@ -64,6 +64,7 @@ const mapProductRow = (product: ProductRow): Product => ({
   imageUrl: (product as any).image_url ?? null,
   tags: (product as any).tags ?? [],
   tastingNotes: (product as any).tasting_notes ?? null,
+  process: (product as any).process ?? null,
 });
 
 
