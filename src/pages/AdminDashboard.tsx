@@ -304,7 +304,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process")
+        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, synced_at, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg")
         .order("name", { ascending: true });
       if (error) throw new Error(error.message);
       setProducts((data as AdminProductRow[]) ?? []);
