@@ -52,20 +52,24 @@ const normalizeRoastLevel = (roastLevel: string | null): Product["roastLevel"] =
   return "medium";
 };
 
-const mapProductRow = (product: ProductRow): Product => ({
-  id: product.id,
-  name: product.name,
-  origin: product.origin ?? "Unknown origin",
-  sku: product.sku ?? product.sellsy_id,
-  pricePerKg: product.price_per_kg,
-  roastLevel: normalizeRoastLevel(product.roast_level),
-  available: product.is_active,
-  description: product.description ?? undefined,
-  imageUrl: (product as any).image_url ?? null,
-  tags: (product as any).tags ?? [],
-  tastingNotes: (product as any).tasting_notes ?? null,
-  process: (product as any).process ?? null,
-});
+const mapProductRow = (product: ProductRow): Product => {
+  const row = product as any;
+  const isCustom = row.data_source_mode === "custom";
+  return {
+    id: product.id,
+    name: isCustom && row.custom_name ? row.custom_name : product.name,
+    origin: product.origin ?? "Unknown origin",
+    sku: product.sku ?? product.sellsy_id,
+    pricePerKg: isCustom && row.custom_price_per_kg != null ? Number(row.custom_price_per_kg) : product.price_per_kg,
+    roastLevel: normalizeRoastLevel(product.roast_level),
+    available: product.is_active,
+    description: product.description ?? undefined,
+    imageUrl: row.image_url ?? null,
+    tags: row.tags ?? [],
+    tastingNotes: row.tasting_notes ?? null,
+    process: row.process ?? null,
+  };
+};
 
 
 
