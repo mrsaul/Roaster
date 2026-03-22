@@ -993,7 +993,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <DialogDescription>Full order breakdown and actions.</DialogDescription>
           </DialogHeader>
 
-          {selectedOrder && (
+          {selectedOrder && (() => {
+            const isEditable = selectedOrder.status === "received";
+            return (
             <div className="space-y-5">
               {/* Info grid */}
               <div className="grid gap-3 sm:grid-cols-2">
