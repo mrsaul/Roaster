@@ -416,7 +416,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   }, [adminOrders, statusFilter, searchQuery, sortField, sortAsc]);
 
   const receivedCount = adminOrders.filter((o) => o.status === "received").length;
-  const packagingBadge = adminOrders.filter((o) => o.status === "ready_for_packaging" || o.status === "packaging").length;
+  const packagingBadge = adminOrders.filter((o) => o.status === "packaging").length;
 
   const clientSummary = useMemo(() => ({
     totalClients: clients.length,
