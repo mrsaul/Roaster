@@ -146,7 +146,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .select(`
           id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
           is_roasted, is_packed, is_labeled,
-          order_items ( product_name, product_sku, quantity, price_per_kg )
+          order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
 
