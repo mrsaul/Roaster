@@ -1074,29 +1074,88 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead>Product</TableHead>
-                      <TableHead>SKU</TableHead>
                       <TableHead className="text-right">Qty (kg)</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
+                      {isEditable && <TableHead className="w-[80px]" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isEditable ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
                     ) : (
-                      selectedOrder.items.map((item, idx) => (
-                        <TableRow key={idx}>
+                      selectedOrder.items.map((item) => (
+                        <TableRow key={item.id}>
                           <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{item.product_sku ?? "—"}</TableCell>
-                          <TableCell className="text-right tabular-nums text-foreground">{item.quantity}</TableCell>
+                          <TableCell className="text-right">
+                            {isEditable ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity - 1)}
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="w-8 text-center tabular-nums text-foreground font-medium">{item.quantity}</span>
+                                <button
+                                  className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                                  onClick={() => void updateOrderItemQty(selectedOrder.id, item.id, item.quantity + 1)}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="tabular-nums text-foreground">{item.quantity}</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
                           <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
+                          {isEditable && (
+                            <TableCell className="text-right">
+                              <button
+                                className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                                onClick={() => void removeOrderItem(selectedOrder.id, item.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Add product (only for received orders) */}
+              {isEditable && (
+                <div>
+                  {showAddProduct ? (
+                    <div className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-foreground">Add a product</p>
+                        <button onClick={() => setShowAddProduct(false)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+                      </div>
+                      <div className="grid gap-1 max-h-48 overflow-y-auto">
+                        {products.filter((p) => p.is_active && !selectedOrder.items.some((i) => i.product_id === p.id)).map((p) => (
+                          <button
+                            key={p.id}
+                            className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
+                            onClick={() => { void addProductToOrder(selectedOrder.id, p); setShowAddProduct(false); }}
+                          >
+                            <span className="text-foreground">{p.custom_name || p.name}</span>
+                            <span className="text-xs text-muted-foreground tabular-nums">€{(p.custom_price_per_kg ?? p.price_per_kg).toFixed(2)}/kg</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAddProduct(true)}>
+                      <Plus className="w-3.5 h-3.5" /> Add product
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Totals */}
               <div className="flex items-center justify-between border-t border-border pt-3">
