@@ -503,35 +503,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 p-4 lg:p-8 overflow-auto">
+        <main className="flex-1 p-4 lg:p-8 pb-28 lg:pb-8 overflow-auto">
           <div className="max-w-6xl mx-auto">
             {/* Mobile header */}
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
                 <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
                 <p className="text-xs text-muted-foreground">{sectionLabels[activeSection]}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {navItems.map((item) => (
-                  <button
-                    key={item.key}
-                    onClick={() => setActiveSection(item.key)}
-                    className={cn(
-                      "p-2 rounded-lg transition-colors relative",
-                      activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50",
-                    )}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.badge && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                <button onClick={onLogout} className="p-2 rounded-lg hover:bg-muted transition-colors">
-                  <LogOut className="w-5 h-5 text-muted-foreground" />
-                </button>
               </div>
             </div>
 
