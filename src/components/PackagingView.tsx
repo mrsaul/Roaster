@@ -229,7 +229,6 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
                     {/* Quick actions */}
                     <div className="flex gap-2">
                       {order.status === "packaging" && (
-                      {order.status === "packaging" && (
                         <Button size="sm" onClick={() => onStatusChange(order.id, "ready_for_delivery")} className="gap-1.5">
                           <CheckSquare className="w-3.5 h-3.5" /> Mark as Ready for Delivery
                         </Button>
