@@ -511,13 +511,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const sectionLabels: Record<string, string> = {
     orders: "Orders",
     packaging: "Packaging",
+    roaster: "Roaster",
     clients: "Clients",
     products: "Products",
   };
 
   /* ── Sidebar nav items ── */
+  const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
   const navItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
+    { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
     { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
