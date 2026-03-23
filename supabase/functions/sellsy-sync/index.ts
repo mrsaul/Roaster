@@ -671,9 +671,6 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
     ordered_at: body.createdAt ?? new Date().toISOString(),
     delivery_date: body.deliveryDate,
     notes: body.notes ?? "",
-    related: sellsyClientId
-      ? [{ type: "company", id: Number(sellsyClientId) }]
-      : [],
     rows: items.map((item) => ({
       type: "item",
       reference: item.sku ?? "",
@@ -683,6 +680,10 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
       tax_id: null,
     })),
   };
+
+  if (sellsyClientId) {
+    payload.related = [{ type: "company", id: Number(sellsyClientId) }];
+  }
 
   return payload;
 }
