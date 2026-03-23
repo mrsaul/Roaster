@@ -787,7 +787,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {activeSection === "roaster" && (
               <RoasterView
                 orders={roasterOrders}
-                onMarkRoasted={(orderId, value) => void updateChecklist(orderId, "is_roasted", value)}
+                onMarkRoasted={async (orderId, value) => {
+                  await updateChecklist(orderId, "is_roasted", value);
+                  if (value) {
+                    await changeOrderStatus(orderId, "packaging");
+                  }
+                }}
               />
             )}
 
