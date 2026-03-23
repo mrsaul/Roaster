@@ -3,7 +3,7 @@ import {
   LogOut, Users, Package, Coffee, BadgeEuro,
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2,
+  Plus, Minus, Trash2, Flame,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
