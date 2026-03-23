@@ -542,6 +542,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     [adminOrders],
   );
 
+  /* ── Roaster orders mapped ── */
+  const roasterOrders: RoasterOrder[] = useMemo(() =>
+    adminOrders.map((o) => ({
+      id: o.id,
+      client_name: o.client_name,
+      delivery_date: o.delivery_date,
+      total_kg: o.total_kg,
+      status: o.status,
+      is_roasted: o.is_roasted,
+      items: o.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity })),
+    })),
+    [adminOrders],
+  );
+
   return (
     <>
       <div className="min-h-screen bg-background flex">
