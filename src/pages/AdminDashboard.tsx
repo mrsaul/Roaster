@@ -3,7 +3,7 @@ import {
   LogOut, Users, Package, Coffee, BadgeEuro,
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2,
+  Plus, Minus, Trash2, Flame,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
 import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
+import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ORDER_STATUSES, ORDER_STATUS_LABEL, ORDER_STATUS_CLASS,
@@ -111,7 +112,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "clients" | "products">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products">("orders");
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
@@ -510,13 +511,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const sectionLabels: Record<string, string> = {
     orders: "Orders",
     packaging: "Packaging",
+    roaster: "Roaster",
     clients: "Clients",
     products: "Products",
   };
 
   /* ── Sidebar nav items ── */
+  const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
   const navItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
+    { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
     { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
@@ -534,6 +538,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       is_packed: o.is_packed,
       is_labeled: o.is_labeled,
       items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+    })),
+    [adminOrders],
+  );
+
+  /* ── Roaster orders mapped ── */
+  const roasterOrders: RoasterOrder[] = useMemo(() =>
+    adminOrders.map((o) => ({
+      id: o.id,
+      client_name: o.client_name,
+      delivery_date: o.delivery_date,
+      total_kg: o.total_kg,
+      status: o.status,
+      is_roasted: o.is_roasted,
+      items: o.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity })),
     })),
     [adminOrders],
   );
@@ -763,6 +781,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
               </section>
+            )}
+
+            {/* ═══════════ ROASTER ═══════════ */}
+            {activeSection === "roaster" && (
+              <RoasterView
+                orders={roasterOrders}
+                onMarkRoasted={(orderId, value) => void updateChecklist(orderId, "is_roasted", value)}
+              />
             )}
 
             {/* ═══════════ PACKAGING ═══════════ */}
