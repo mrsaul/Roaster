@@ -151,7 +151,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled,
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
