@@ -1011,7 +1011,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       {/* ── Order detail dialog ── */}
       <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Order {selectedOrder?.id.slice(0, 8)}
