@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import {
   LogOut, Users, Package, Coffee, BadgeEuro,
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
