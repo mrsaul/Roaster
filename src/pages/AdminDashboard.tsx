@@ -307,6 +307,76 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [adminOrders, approveOrder]);
 
+  /* ── Send invoice to Sellsy ── */
+  const sendInvoiceToSellsy = useCallback(async (orderId: string) => {
+    setInvoiceSendingIds((prev) => new Set(prev).add(orderId));
+    try {
+      const order = adminOrders.find((o) => o.id === orderId);
+      if (!order) throw new Error("Order not found");
+      if (order.invoicing_status === "sent") throw new Error("Already sent");
+
+      const { data: clientRow } = await supabase
+        .from("client_onboarding")
+        .select("sellsy_client_id")
+        .eq("user_id", order.user_id)
+        .maybeSingle();
+
+      const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
+        body: {
+          mode: "create-order",
+          orderId: order.id,
+          deliveryDate: order.delivery_date,
+          createdAt: order.created_at,
+          sellsy_client_id: clientRow?.sellsy_client_id ?? null,
+          items: order.items.map((i) => ({
+            name: i.product_name,
+            sku: i.product_sku,
+            quantity: i.quantity,
+            pricePerKg: i.price_per_kg,
+          })),
+          totalKg: order.total_kg,
+          totalPrice: order.total_price,
+        },
+      });
+
+      if (sellsyErr || !sellsyResult?.success) {
+        await supabase.from("orders").update({
+          invoicing_status: "error",
+          last_invoice_sync: new Date().toISOString(),
+        }).eq("id", orderId);
+        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, invoicing_status: "error" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
+        toast({
+          title: "Invoice send failed",
+          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
+          variant: "destructive",
+        });
+      } else {
+        const sellsyId = sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null;
+        await supabase.from("orders").update({
+          sellsy_id: sellsyId,
+          invoicing_status: "sent",
+          last_invoice_sync: new Date().toISOString(),
+        }).eq("id", orderId);
+        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, sellsy_id: sellsyId, invoicing_status: "sent" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
+        toast({ title: "Invoice sent to Sellsy", description: `Invoice ID: ${sellsyId ?? "—"}` });
+      }
+    } catch (err) {
+      toast({ title: "Invoice send failed", description: String(err), variant: "destructive" });
+    } finally {
+      setInvoiceSendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  }, [adminOrders, toast]);
+
+  const bulkSendInvoices = useCallback(async (orderIds: string[]) => {
+    for (const id of orderIds) {
+      await sendInvoiceToSellsy(id);
+    }
+  }, [sendInvoiceToSellsy]);
+
   /* ── Order item editing (only for "received" orders) ── */
   const recalcOrderTotals = useCallback(async (orderId: string) => {
     const { data: items } = await supabase
