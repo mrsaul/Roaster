@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
 import {
   LogOut, Users, Package, Coffee, BadgeEuro,
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
-  Plus, Minus, Trash2, Flame,
+  Plus, Minus, Trash2, Flame, FileText,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,6 +95,8 @@ type AdminOrder = {
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
+  invoicing_status: InvoicingStatus;
+  last_invoice_sync: string | null;
   items: AdminOrderItem[];
 };
 
@@ -112,7 +115,8 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing">("orders");
+  const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
@@ -147,7 +151,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .from("orders")
         .select(`
           id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled,
+          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
@@ -176,6 +180,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
+          invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
+          last_invoice_sync: o.last_invoice_sync ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             id: i.id,
             product_id: i.product_id,
@@ -300,6 +306,76 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       await approveOrder(r);
     }
   }, [adminOrders, approveOrder]);
+
+  /* ── Send invoice to Sellsy ── */
+  const sendInvoiceToSellsy = useCallback(async (orderId: string) => {
+    setInvoiceSendingIds((prev) => new Set(prev).add(orderId));
+    try {
+      const order = adminOrders.find((o) => o.id === orderId);
+      if (!order) throw new Error("Order not found");
+      if (order.invoicing_status === "sent") throw new Error("Already sent");
+
+      const { data: clientRow } = await supabase
+        .from("client_onboarding")
+        .select("sellsy_client_id")
+        .eq("user_id", order.user_id)
+        .maybeSingle();
+
+      const { data: sellsyResult, error: sellsyErr } = await supabase.functions.invoke("sellsy-sync", {
+        body: {
+          mode: "create-order",
+          orderId: order.id,
+          deliveryDate: order.delivery_date,
+          createdAt: order.created_at,
+          sellsy_client_id: clientRow?.sellsy_client_id ?? null,
+          items: order.items.map((i) => ({
+            name: i.product_name,
+            sku: i.product_sku,
+            quantity: i.quantity,
+            pricePerKg: i.price_per_kg,
+          })),
+          totalKg: order.total_kg,
+          totalPrice: order.total_price,
+        },
+      });
+
+      if (sellsyErr || !sellsyResult?.success) {
+        await supabase.from("orders").update({
+          invoicing_status: "error",
+          last_invoice_sync: new Date().toISOString(),
+        }).eq("id", orderId);
+        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, invoicing_status: "error" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
+        toast({
+          title: "Invoice send failed",
+          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
+          variant: "destructive",
+        });
+      } else {
+        const sellsyId = sellsyResult.sellsyId ?? sellsyResult.sellsy_id ?? null;
+        await supabase.from("orders").update({
+          sellsy_id: sellsyId,
+          invoicing_status: "sent",
+          last_invoice_sync: new Date().toISOString(),
+        }).eq("id", orderId);
+        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, sellsy_id: sellsyId, invoicing_status: "sent" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
+        toast({ title: "Invoice sent to Sellsy", description: `Invoice ID: ${sellsyId ?? "—"}` });
+      }
+    } catch (err) {
+      toast({ title: "Invoice send failed", description: String(err), variant: "destructive" });
+    } finally {
+      setInvoiceSendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
+    }
+  }, [adminOrders, toast]);
+
+  const bulkSendInvoices = useCallback(async (orderIds: string[]) => {
+    for (const id of orderIds) {
+      await sendInvoiceToSellsy(id);
+    }
+  }, [sendInvoiceToSellsy]);
 
   /* ── Order item editing (only for "received" orders) ── */
   const recalcOrderTotals = useCallback(async (orderId: string) => {
@@ -512,16 +588,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     orders: "Orders",
     packaging: "Packaging",
     roaster: "Roaster",
+    invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
   };
 
   /* ── Sidebar nav items ── */
   const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
+  const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
   const navItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
     { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+    { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
   ];
@@ -552,6 +631,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       status: o.status,
       is_roasted: o.is_roasted,
       items: o.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, quantity: i.quantity })),
+    })),
+    [adminOrders],
+  );
+
+  /* ── Invoicing orders mapped ── */
+  const invoicingOrders: InvoicingOrder[] = useMemo(() =>
+    adminOrders.map((o) => ({
+      id: o.id,
+      user_id: o.user_id,
+      client_name: o.client_name,
+      user_email: o.user_email,
+      delivery_date: o.delivery_date,
+      total_kg: o.total_kg,
+      total_price: o.total_price,
+      status: o.status,
+      sellsy_id: o.sellsy_id,
+      invoicing_status: o.invoicing_status,
+      last_invoice_sync: o.last_invoice_sync,
+      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
     })),
     [adminOrders],
   );
@@ -802,6 +900,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 orders={packagingOrders}
                 onStatusChange={(orderId, newStatus) => void changeOrderStatus(orderId, newStatus)}
                 onChecklistChange={(orderId, field, value) => void updateChecklist(orderId, field, value)}
+              />
+            )}
+
+            {/* ═══════════ INVOICING ═══════════ */}
+            {activeSection === "invoicing" && (
+              <InvoicingView
+                orders={invoicingOrders}
+                onSendToSellsy={sendInvoiceToSellsy}
+                onBulkSendToSellsy={bulkSendInvoices}
+                sendingIds={invoiceSendingIds}
               />
             )}
 

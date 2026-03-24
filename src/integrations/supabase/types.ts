@@ -210,9 +210,11 @@ export type Database = {
           created_at: string
           delivery_date: string
           id: string
+          invoicing_status: string
           is_labeled: boolean
           is_packed: boolean
           is_roasted: boolean
+          last_invoice_sync: string | null
           sellsy_id: string | null
           status: string
           total_kg: number
@@ -224,9 +226,11 @@ export type Database = {
           created_at?: string
           delivery_date: string
           id?: string
+          invoicing_status?: string
           is_labeled?: boolean
           is_packed?: boolean
           is_roasted?: boolean
+          last_invoice_sync?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
@@ -238,9 +242,11 @@ export type Database = {
           created_at?: string
           delivery_date?: string
           id?: string
+          invoicing_status?: string
           is_labeled?: boolean
           is_packed?: boolean
           is_roasted?: boolean
+          last_invoice_sync?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
