@@ -903,6 +903,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               />
             )}
 
+            {/* ═══════════ INVOICING ═══════════ */}
+            {activeSection === "invoicing" && (
+              <InvoicingView
+                orders={invoicingOrders}
+                onSendToSellsy={sendInvoiceToSellsy}
+                onBulkSendToSellsy={bulkSendInvoices}
+                sendingIds={invoiceSendingIds}
+              />
+            )}
+
             {/* ═══════════ CLIENTS ═══════════ */}
             {activeSection === "clients" && (
               <>
