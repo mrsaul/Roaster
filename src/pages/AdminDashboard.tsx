@@ -1241,13 +1241,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               key={item.key}
               onClick={() => setActiveSection(item.key)}
               className={cn(
-                "relative flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-medium transition-colors",
+                "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
                 activeSection === item.key
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="h-5 w-5" />
               {activeSection === item.key && <span className="hidden min-[400px]:inline">{item.label}</span>}
               {item.badge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
@@ -1256,12 +1256,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               )}
             </button>
           ))}
-          <button
-            onClick={onLogout}
-            className="flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
       </div>
     </>
