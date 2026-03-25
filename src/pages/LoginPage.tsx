@@ -208,9 +208,6 @@ export default function LoginPage() {
             </button>
           )}
 
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            The account for contact@pluralcafe.fr is promoted to admin automatically after sign-in.
-          </p>
         </form>
       </motion.div>
     </div>
