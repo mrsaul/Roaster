@@ -5,11 +5,13 @@ import CatalogPage from "./CatalogPage";
 import CheckoutPage from "./CheckoutPage";
 import OrderHistoryPage from "./OrderHistoryPage";
 import AdminDashboard from "./AdminDashboard";
+import RoasterDashboard from "./RoasterDashboard";
+import PackagingDashboard from "./PackagingDashboard";
 import OnboardingPage from "./OnboardingPage";
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "home" | "shop" | "checkout" | "orders" | "admin" | "onboarding";
-type AppRole = "admin" | "user";
+type View = "home" | "shop" | "checkout" | "orders" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
+type AppRole = "admin" | "user" | "roaster" | "packaging";
 
 type PersistedOrderRow = {
   id: string;
