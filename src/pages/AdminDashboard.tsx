@@ -1116,6 +1116,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </section>
             )}
+
+            {/* ═══════════ TEAM ═══════════ */}
+            {activeSection === "team" && <UserManagementView />}
           </div>
         </main>
       </div>
