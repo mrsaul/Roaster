@@ -377,6 +377,10 @@ const Index = () => {
       );
     case "admin":
       return <AdminDashboard orders={orders} onLogout={handleLogout} />;
+    case "roaster_dashboard":
+      return <RoasterDashboard onLogout={handleLogout} />;
+    case "packaging_dashboard":
+      return <PackagingDashboard onLogout={handleLogout} />;
     default:
       return null;
   }
