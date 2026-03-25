@@ -123,11 +123,24 @@ const Index = () => {
       throw ensureError;
     }
 
-    const normalizedRole = ensuredRole === "admin" ? "admin" : "user";
+    const normalizedRole = ensuredRole === "admin" ? "admin" 
+      : ensuredRole === "roaster" ? "roaster"
+      : ensuredRole === "packaging" ? "packaging"
+      : "user";
     setRole(normalizedRole);
 
     if (normalizedRole === "admin") {
       setView("admin");
+      return;
+    }
+
+    if (normalizedRole === "roaster") {
+      setView("roaster_dashboard");
+      return;
+    }
+
+    if (normalizedRole === "packaging") {
+      setView("packaging_dashboard");
       return;
     }
 
