@@ -1235,7 +1235,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <TableHead className="text-right">Qty (kg)</TableHead>
                       <TableHead className="text-right">€/kg</TableHead>
                       <TableHead className="text-right">Subtotal</TableHead>
-                      {isEditable && <TableHead className="w-[80px]" />}
+                      {canEdit && <TableHead className="w-[80px]" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
