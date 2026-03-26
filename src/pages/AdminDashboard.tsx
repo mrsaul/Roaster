@@ -1268,7 +1268,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
                           <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
-                          {isEditable && (
+                          {canEdit && (
                             <TableCell className="text-right">
                               <button
                                 className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
