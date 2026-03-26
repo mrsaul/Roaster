@@ -1240,7 +1240,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </TableHeader>
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
-                      <TableRow><TableCell colSpan={isEditable ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={canEdit ? 5 : 4} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
                     ) : (
                       selectedOrder.items.map((item) => (
                         <TableRow key={item.id}>
