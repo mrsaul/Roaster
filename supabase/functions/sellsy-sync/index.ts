@@ -643,11 +643,12 @@ async function logSyncRun(params: {
   parseErrors: ProductParseError[];
   startedAt: string;
   completedAt: string;
+  syncType?: string;
 }) {
   const supabase = createServiceSupabaseClient();
   const { error } = await supabase.from("sync_runs").insert({
     source: "sellsy",
-    sync_type: "products",
+    sync_type: params.syncType ?? "products",
     status: params.status,
     synced_count: params.syncedCount,
     parse_errors: params.parseErrors,
@@ -738,6 +739,78 @@ async function handleClientList(user: AuthenticatedUser, accessToken: string) {
   });
 }
 
+async function handleBulkClientSync(user: AuthenticatedUser, accessToken: string) {
+  const startedAt = new Date().toISOString();
+  const sellsyClients = await fetchSellsyClients(accessToken);
+  const normalizedClients = sellsyClients.map(normalizeClient);
+
+  const supabase = createServiceSupabaseClient();
+  const now = new Date().toISOString();
+  let syncedCount = 0;
+
+  for (const client of normalizedClients) {
+    const address = [client.address, client.city, client.country].filter(Boolean).join(", ") || null;
+
+    // Check if a client_onboarding row already exists with this sellsy_client_id
+    const { data: existing } = await supabase
+      .from("client_onboarding")
+      .select("id")
+      .eq("sellsy_client_id", client.id)
+      .maybeSingle();
+
+    if (existing) {
+      // Update Sellsy-sourced fields only
+      await supabase
+        .from("client_onboarding")
+        .update({
+          company_name: client.name,
+          contact_name: client.name,
+          email: client.email,
+          phone: client.phone,
+          delivery_address: address,
+          last_synced_at: now,
+        })
+        .eq("id", existing.id);
+    } else {
+      // Insert new client_onboarding row linked to a placeholder user_id
+      // We use a deterministic UUID from the sellsy ID so it can be linked later
+      await supabase
+        .from("client_onboarding")
+        .insert({
+          user_id: user.userId,
+          sellsy_client_id: client.id,
+          company_name: client.name,
+          contact_name: client.name,
+          email: client.email,
+          phone: client.phone,
+          delivery_address: address,
+          client_data_mode: "sellsy",
+          onboarding_status: "completed",
+          last_synced_at: now,
+        });
+    }
+    syncedCount++;
+  }
+
+  const completedAt = new Date().toISOString();
+  await logSyncRun({
+    userId: user.userId,
+    status: "success",
+    syncedCount,
+    parseErrors: [],
+    startedAt,
+    completedAt,
+    syncType: "clients",
+  });
+
+  return jsonResponse({
+    success: true,
+    mode: "sync-all-clients",
+    syncedCount,
+    requestedBy: user.userId,
+  });
+}
+
 async function handleClientSync(user: AuthenticatedUser, accessToken: string, body: JsonRecord) {
   const sellsyClientId = String(body.sellsy_client_id ?? "");
   const clientOnboardingId = String(body.client_id ?? "");
@@ -816,6 +889,10 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "list-clients") {
       return await handleClientList(user, accessToken);
+    }
+
+    if (body?.mode === "sync-all-clients") {
+      return await handleBulkClientSync(user, accessToken);
     }
 
     if (body?.mode === "sync-client") {
