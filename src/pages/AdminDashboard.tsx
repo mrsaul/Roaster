@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
+import { AddClientDialog } from "@/components/AddClientDialog";
 import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
 import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -138,6 +139,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [clientError, setClientError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
   const [runningClientSync, setRunningClientSync] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
@@ -976,10 +978,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         Import or update client records from Sellsy.
                       </p>
                     </div>
-                    <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
-                      <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
-                      {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
+                        <Plus className="h-4 w-4" /> Add New Client
+                      </Button>
+                      <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                        <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
+                        {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -1405,6 +1412,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         open={Boolean(selectedProduct)}
         onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
         onSaved={() => void loadProducts()}
+      />
+
+      {/* ── Add client dialog ── */}
+      <AddClientDialog
+        open={showAddClient}
+        onOpenChange={setShowAddClient}
+        onCreated={() => void loadClients()}
       />
 
       {/* ── Create order dialog ── */}
