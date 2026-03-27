@@ -643,11 +643,12 @@ async function logSyncRun(params: {
   parseErrors: ProductParseError[];
   startedAt: string;
   completedAt: string;
+  syncType?: string;
 }) {
   const supabase = createServiceSupabaseClient();
   const { error } = await supabase.from("sync_runs").insert({
     source: "sellsy",
-    sync_type: "products",
+    sync_type: params.syncType ?? "products",
     status: params.status,
     synced_count: params.syncedCount,
     parse_errors: params.parseErrors,
