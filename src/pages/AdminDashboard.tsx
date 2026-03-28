@@ -1502,7 +1502,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               )}
             >
               <item.icon className="h-5 w-5" />
-              {activeSection === item.key && !menuOpen && <span className="hidden min-[400px]:inline">{item.label}</span>}
+              <span className="text-[10px] leading-none">{item.label}</span>
               {item.badge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {item.badge}
