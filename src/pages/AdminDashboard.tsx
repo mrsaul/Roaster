@@ -629,17 +629,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   /* ── Sidebar nav items ── */
+  const [menuOpen, setMenuOpen] = useState(false);
   const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
   const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
-  const navItems = [
+
+  const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
     { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+  ];
+
+  const menuSubItems = [
     { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
   ];
+
+  const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
+  const menuTotalBadge = menuSubItems.reduce((sum, item) => sum + (item.badge ?? 0), 0);
 
   /* ── Packaging orders mapped ── */
   const packagingOrders: PackagingOrder[] = useMemo(() =>
