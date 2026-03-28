@@ -17,6 +17,7 @@ import { AdminClientsSection } from "@/components/AdminClientsSection";
 import { AdminProductDetail, type AdminProduct } from "@/components/AdminProductDetail";
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
 import { AddClientDialog } from "@/components/AddClientDialog";
+import { ProfileSettingsView } from "@/components/ProfileSettingsView";
 import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
 import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -126,7 +127,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -626,6 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     clients: "Clients",
     products: "Products",
     team: "Team",
+    profile: "Profile Settings",
   };
 
   /* ── Sidebar nav items ── */
@@ -644,6 +646,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
+    { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
   ];
 
   const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
@@ -1211,6 +1214,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
             {/* ═══════════ TEAM ═══════════ */}
             {activeSection === "team" && <UserManagementView />}
+
+            {/* ═══════════ PROFILE ═══════════ */}
+            {activeSection === "profile" && <ProfileSettingsView />}
           </div>
         </main>
       </div>
