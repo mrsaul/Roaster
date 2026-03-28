@@ -6,7 +6,11 @@ import {
   RefreshCw, AlertCircle, CheckCircle2, Clock3,
   Calendar, Search, X, Check, Send, RotateCcw, Truck,
   Plus, Minus, Trash2, Flame, FileText, Shield,
+  Menu, User, Settings,
 } from "lucide-react";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import { format, formatDistanceToNow, parseISO, isToday, differenceInHours } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminClientsSection } from "@/components/AdminClientsSection";
