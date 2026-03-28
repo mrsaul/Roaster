@@ -627,6 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     clients: "Clients",
     products: "Products",
     team: "Team",
+    profile: "Profile Settings",
   };
 
   /* ── Sidebar nav items ── */
