@@ -1484,19 +1484,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* ── Floating bottom dock (mobile) ── */}
       <div className="fixed inset-x-0 bottom-4 z-50 px-4 lg:hidden">
         <div className="mx-auto flex max-w-lg items-center justify-between rounded-full border border-border bg-card/95 p-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/85">
-          {navItems.map((item) => (
+          {primaryNavItems.map((item) => (
             <button
               key={item.key}
-              onClick={() => setActiveSection(item.key)}
+              onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
               className={cn(
                 "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
-                activeSection === item.key
+                activeSection === item.key && !menuOpen
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               <item.icon className="h-5 w-5" />
-              {activeSection === item.key && <span className="hidden min-[400px]:inline">{item.label}</span>}
+              {activeSection === item.key && !menuOpen && <span className="hidden min-[400px]:inline">{item.label}</span>}
               {item.badge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {item.badge}
@@ -1504,6 +1504,56 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               )}
             </button>
           ))}
+
+          {/* Menu button with popover */}
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={cn(
+                  "relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+                  menuSectionActive || menuOpen
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Menu className="h-5 w-5" />
+                {(menuSectionActive || menuOpen) && <span className="hidden min-[400px]:inline">Menu</span>}
+                {menuTotalBadge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
+                    {menuTotalBadge}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-52 p-1.5 rounded-xl mb-2" sideOffset={8}>
+              <div className="space-y-0.5">
+                {menuSubItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => { setActiveSection(item.key); setMenuOpen(false); }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      activeSection === item.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                    {item.badge && (
+                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0">{item.badge}</Badge>
+                    )}
+                  </button>
+                ))}
+                <div className="border-t border-border my-1" />
+                <button
+                  onClick={() => { setMenuOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </>
