@@ -638,7 +638,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
-    { key: "packaging" as const, icon: Truck, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
+    { key: "packaging" as const, icon: Bike, label: "Packaging", badge: packagingBadge > 0 ? packagingBadge : null },
   ];
 
   const menuSubItems = [
