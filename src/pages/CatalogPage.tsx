@@ -146,7 +146,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
       .order("size_kg", { ascending: true });
 
     const variantsByProduct = new Map<string, ProductVariant[]>();
-    (variantsData ?? []).forEach((v: any) => {
+    ((variantsData ?? []) as any[]).forEach((v) => {
       const list = variantsByProduct.get(v.product_id) ?? [];
       list.push({
         id: v.id,
