@@ -36,7 +36,7 @@ export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onCon
           </button>
           <div>
             <h1 className="text-base font-medium text-foreground">Review Order</h1>
-            <p className="text-xs text-muted-foreground tabular-nums">{totalKg.toFixed(1)} kg · €{totalPrice.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{totalKg.toFixed(2)} kg · €{totalPrice.toFixed(2)}</p>
           </div>
         </div>
       </header>
@@ -45,18 +45,28 @@ export default function CheckoutPage({ items, totalKg, totalPrice, onBack, onCon
         <section>
           <h2 className="text-sm font-medium text-muted-foreground mb-3">Items</h2>
           <div className="space-y-2">
-            {items.map((item) => (
-              <div key={item.product.id} className="flex items-center justify-between py-2 px-3 bg-card border border-border rounded-lg">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{item.product.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{item.product.sku}</p>
+            {items.map((item) => {
+              const itemKg = item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
+              const itemPrice = item.unitPrice
+                ? item.unitPrice * item.quantity
+                : item.quantity * item.product.pricePerKg;
+              const key = `${item.product.id}-${item.sizeLabel ?? "bulk"}`;
+              return (
+                <div key={key} className="flex items-center justify-between py-2 px-3 bg-card border border-border rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{item.product.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.sizeLabel ? `${item.sizeLabel} × ${item.quantity}` : `${item.quantity} kg`}
+                      {item.product.sku ? ` · ${item.product.sku}` : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium tabular-nums text-foreground">{itemKg.toFixed(2)} kg</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">€{itemPrice.toFixed(2)}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium tabular-nums text-foreground">{item.quantity.toFixed(1)} kg</p>
-                  <p className="text-xs text-muted-foreground tabular-nums">€{(item.quantity * item.product.pricePerKg).toFixed(2)}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
