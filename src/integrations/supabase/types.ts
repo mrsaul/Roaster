@@ -135,6 +135,8 @@ export type Database = {
           product_name: string
           product_sku: string | null
           quantity: number
+          size_kg: number | null
+          size_label: string | null
         }
         Insert: {
           created_at?: string
@@ -145,6 +147,8 @@ export type Database = {
           product_name: string
           product_sku?: string | null
           quantity?: number
+          size_kg?: number | null
+          size_label?: string | null
         }
         Update: {
           created_at?: string
@@ -155,6 +159,8 @@ export type Database = {
           product_name?: string
           product_sku?: string | null
           quantity?: number
+          size_kg?: number | null
+          size_label?: string | null
         }
         Relationships: [
           {
@@ -255,6 +261,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      product_variants: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          price: number
+          product_id: string
+          size_kg: number
+          size_label: string
+          sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_id: string
+          size_kg: number
+          size_label: string
+          sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_id?: string
+          size_kg?: number
+          size_label?: string
+          sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       products: {
         Row: {

@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { CartBar } from "@/components/CartBar";
 
-import { QuantityStepper } from "@/components/QuantityStepper";
 import { Button } from "@/components/ui/button";
-import { MOCK_PRODUCTS, type Product } from "@/lib/store";
+import { MOCK_PRODUCTS, type Product, type ProductVariant } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
-import { LogOut, ClipboardList, House, ShoppingBag, RefreshCw, MapPin, Coffee } from "lucide-react";
+import { LogOut, ClipboardList, House, ShoppingBag, RefreshCw, MapPin, Coffee, Minus, Plus } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 type ProductRow = Tables<"products">;
 
@@ -19,14 +19,14 @@ type UsualOrderPreset = {
 
 interface CatalogPageProps {
   cart: {
-    items: { product: Product; quantity: number }[];
+    items: { product: Product; quantity: number; sizeLabel?: string; sizeKg?: number; unitPrice?: number }[];
     totalKg: number;
     totalPrice: number;
-    getQuantity: (id: string) => number;
-    updateQuantity: (product: Product, qty: number) => void;
-    hydrateCart: (items: { product: Product; quantity: number }[]) => void;
+    getQuantity: (id: string, sizeLabel?: string) => number;
+    updateQuantity: (product: Product, qty: number, sizeLabel?: string, sizeKg?: number, unitPrice?: number) => void;
+    hydrateCart: (items: { product: Product; quantity: number; sizeLabel?: string; sizeKg?: number; unitPrice?: number }[]) => void;
   };
-  usualOrderItems: { product: Product; quantity: number }[];
+  usualOrderItems: { product: Product; quantity: number; sizeLabel?: string; sizeKg?: number; unitPrice?: number }[];
   lastOrderDate?: string | null;
   lastOrderTotal?: number | null;
   mode: "home" | "shop";
@@ -48,11 +48,10 @@ const normalizeRoastLevel = (roastLevel: string | null): Product["roastLevel"] =
   if (roastLevel === "light" || roastLevel === "medium" || roastLevel === "dark" || roastLevel === "espresso") {
     return roastLevel;
   }
-
   return "medium";
 };
 
-const mapProductRow = (product: ProductRow): Product => {
+const mapProductRow = (product: ProductRow, variants?: ProductVariant[]): Product => {
   const row = product as any;
   const isCustom = row.data_source_mode === "custom";
   return {
@@ -68,13 +67,50 @@ const mapProductRow = (product: ProductRow): Product => {
     tags: row.tags ?? [],
     tastingNotes: row.tasting_notes ?? null,
     process: row.process ?? null,
+    variants: variants && variants.length > 0 ? variants : undefined,
   };
 };
 
-
-
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/* ── Size Quantity Stepper ── */
+function SizeQuantityStepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (val: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="w-8 h-8 rounded-lg border border-border bg-secondary flex items-center justify-center text-foreground transition-colors hover:bg-muted"
+        aria-label="Decrease"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </motion.button>
+      <span className="w-8 text-center font-mono text-sm tabular-nums font-medium text-foreground">
+        {value}
+      </span>
+      <motion.button
+        whileTap={{ scale: 0.92 }}
+        onClick={() => onChange(value + 1)}
+        className={cn(
+          "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+          value > 0
+            ? "bg-primary text-primary-foreground"
+            : "border border-border bg-secondary text-foreground hover:bg-muted"
+        )}
+        aria-label="Increase"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </motion.button>
+    </div>
+  );
 }
 
 export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, lastOrderTotal, mode, onCheckout, onReorderLastOrder, onGoHome, onGoShop, onViewOrders, onLogout }: CatalogPageProps) {
@@ -88,6 +124,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
     setLoadingProducts(true);
     setProductsError(null);
 
+    // Load products
     const { data, error } = await supabase
       .from("products")
       .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg")
@@ -101,44 +138,35 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
       return;
     }
 
-    const remoteProducts = (data ?? []).map(mapProductRow);
+    // Load all variants
+    const { data: variantsData } = await supabase
+      .from("product_variants")
+      .select("id, product_id, size_label, size_kg, price, sku, is_active")
+      .eq("is_active", true)
+      .order("size_kg", { ascending: true });
+
+    const variantsByProduct = new Map<string, ProductVariant[]>();
+    ((variantsData ?? []) as any[]).forEach((v) => {
+      const list = variantsByProduct.get(v.product_id) ?? [];
+      list.push({
+        id: v.id,
+        size_label: v.size_label,
+        size_kg: Number(v.size_kg),
+        price: Number(v.price),
+        sku: v.sku,
+        is_active: v.is_active,
+      });
+      variantsByProduct.set(v.product_id, list);
+    });
+
+    const remoteProducts = (data ?? []).map((p) => mapProductRow(p as unknown as ProductRow, variantsByProduct.get(p.id)));
     setProducts(remoteProducts.length > 0 ? remoteProducts : []);
     setLoadingProducts(false);
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    const loadCatalog = async () => {
-      setLoadingProducts(true);
-      setProductsError(null);
-
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, sellsy_id, sku, name, description, origin, roast_level, price_per_kg, is_active, image_url, tags, tasting_notes, process, data_source_mode, custom_name, custom_price_per_kg")
-        .eq("is_active", true)
-        .order("name", { ascending: true });
-
-      if (!active) return;
-
-      if (error) {
-        setProductsError(error.message);
-        setProducts(MOCK_PRODUCTS.filter((product) => product.available));
-        setLoadingProducts(false);
-        return;
-      }
-
-      const remoteProducts = (data ?? []).map(mapProductRow);
-      setProducts(remoteProducts.length > 0 ? remoteProducts : []);
-      setLoadingProducts(false);
-    };
-
-    void loadCatalog();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    void loadProducts();
+  }, [loadProducts]);
 
   const visibleProducts = useMemo(() => products.filter((product) => product.available), [products]);
 
@@ -211,20 +239,39 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
               {resolvedUsualOrderItems.map(({ product }) => (
                 <div key={product.id} className="space-y-2">
                   <p className="text-base font-medium text-foreground">{product.name}</p>
-                  <QuantityStepper
-                    value={cart.getQuantity(product.id)}
-                    onChange={(qty) => cart.updateQuantity(product, qty)}
-                    className="justify-start"
-                  />
+                  {product.variants && product.variants.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {product.variants.map((v) => (
+                        <div key={v.size_label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground w-10">{v.size_label}</span>
+                            <span className="text-xs tabular-nums text-muted-foreground">€{v.price.toFixed(2)}</span>
+                          </div>
+                          <SizeQuantityStepper
+                            value={cart.getQuantity(product.id, v.size_label)}
+                            onChange={(qty) => cart.updateQuantity(product, qty, v.size_label, v.size_kg, v.price)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs tabular-nums text-muted-foreground">€{product.pricePerKg.toFixed(2)}/kg</span>
+                      <SizeQuantityStepper
+                        value={cart.getQuantity(product.id)}
+                        onChange={(qty) => cart.updateQuantity(product, qty)}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
-
             <div className="space-y-4 border-t border-border pt-4">
               <div>
                 <p className="text-sm text-muted-foreground">TOTAL</p>
-                <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(usualOrderTotal)} €</p>
+                <p className="text-3xl font-medium tabular-nums text-foreground">{Math.round(cart.totalPrice)} €</p>
+                <p className="text-xs text-muted-foreground tabular-nums">{cart.totalKg.toFixed(2)} kg</p>
               </div>
               {lastOrderDate || lastOrderTotal ? (
                 <div className="rounded-xl border border-border bg-background px-4 py-3">
@@ -240,7 +287,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                   size="lg"
                   variant="secondary"
                   onClick={onReorderLastOrder}
-                  disabled={!usualOrderHasItems}
+                  disabled={cart.items.length === 0}
                   className="w-full rounded-xl"
                 >
                   Reorder last order
@@ -248,7 +295,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                 <Button
                   size="lg"
                   onClick={onCheckout}
-                  disabled={!usualOrderHasItems}
+                  disabled={cart.items.length === 0}
                   className="w-full rounded-xl"
                 >
                   Confirm Order
@@ -261,7 +308,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
         {mode === "shop" ? (
           <>
             <motion.div
-              className="flex flex-col gap-2"
+              className="flex flex-col gap-3"
               initial="hidden"
               animate="visible"
               variants={{
@@ -291,7 +338,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                     )}
 
                     <div className="p-4 space-y-3">
-                      {/* Header: name + description */}
+                      {/* Header */}
                       <div className="space-y-1.5">
                         <h3 className="text-base font-semibold leading-snug text-foreground">
                           {product.name}
@@ -343,19 +390,50 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
                         )}
                       </div>
 
-                      {/* Price + stepper */}
-                      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-                        <div>
-                          <span className="text-lg font-semibold tabular-nums text-foreground">
-                            €{product.pricePerKg.toFixed(2)}
-                          </span>
-                          <span className="ml-1 text-xs text-muted-foreground">/kg</span>
-                          <p className="text-[11px] text-muted-foreground">3 kg units</p>
-                        </div>
-                        <QuantityStepper
-                          value={cart.getQuantity(product.id)}
-                          onChange={(qty) => cart.updateQuantity(product, qty)}
-                        />
+                      {/* Size variants or legacy pricing */}
+                      <div className="border-t border-border pt-3">
+                        {product.variants && product.variants.length > 0 ? (
+                          <div className="space-y-2">
+                            {product.variants.map((v) => {
+                              const qty = cart.getQuantity(product.id, v.size_label);
+                              return (
+                                <div key={v.size_label} className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-3">
+                                    <span className={cn(
+                                      "inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums min-w-[48px]",
+                                      qty > 0
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border bg-muted/30 text-muted-foreground"
+                                    )}>
+                                      {v.size_label}
+                                    </span>
+                                    <span className="text-sm font-medium tabular-nums text-foreground">
+                                      €{v.price.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <SizeQuantityStepper
+                                    value={qty}
+                                    onChange={(q) => cart.updateQuantity(product, q, v.size_label, v.size_kg, v.price)}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <span className="text-lg font-semibold tabular-nums text-foreground">
+                                €{product.pricePerKg.toFixed(2)}
+                              </span>
+                              <span className="ml-1 text-xs text-muted-foreground">/kg</span>
+                              <p className="text-[11px] text-muted-foreground">3 kg units</p>
+                            </div>
+                            <SizeQuantityStepper
+                              value={cart.getQuantity(product.id)}
+                              onChange={(qty) => cart.updateQuantity(product, qty)}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -373,7 +451,7 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
               <div className="rounded-lg border border-border bg-card px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground">Couldn’t load the synced catalog.</p>
+                    <p className="text-sm font-medium text-foreground">Couldn't load the synced catalog.</p>
                     <p className="mt-1 text-xs text-muted-foreground">Showing the default product list for now.</p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" onClick={() => void loadProducts()} className="rounded-full">
@@ -415,15 +493,17 @@ export default function CatalogPage({ cart, usualOrderItems, lastOrderDate, last
           </button>
           <button
             onClick={onViewOrders}
-            className="relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ClipboardList className="h-4 w-4" />
             Orders
-            {cart.items.length > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-success" aria-hidden="true" /> : null}
           </button>
         </div>
       </div>
+
+      {cart.items.length > 0 && mode === "shop" && (
+        <CartBar totalKg={cart.totalKg} totalPrice={cart.totalPrice} onCheckout={onCheckout} />
+      )}
     </div>
   );
 }
-

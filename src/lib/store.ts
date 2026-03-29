@@ -1,5 +1,14 @@
 import { useState, useCallback, useMemo } from "react";
 
+export interface ProductVariant {
+  id: string;
+  size_label: string; // '250g', '1kg', '3kg'
+  size_kg: number;    // 0.25, 1, 3
+  price: number;
+  sku: string | null;
+  is_active: boolean;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -13,11 +22,20 @@ export interface Product {
   tags?: string[];
   tastingNotes?: string | null;
   process?: string | null;
+  variants?: ProductVariant[];
 }
 
 export interface CartItem {
   product: Product;
-  quantity: number; // in kg
+  quantity: number; // number of units (bags)
+  sizeLabel?: string; // '250g', '1kg', '3kg'
+  sizeKg?: number;    // 0.25, 1, 3
+  unitPrice?: number; // price per bag
+}
+
+// Cart key combines product id + size for unique identification
+function cartKey(productId: string, sizeLabel?: string): string {
+  return sizeLabel ? `${productId}::${sizeLabel}` : productId;
 }
 
 export interface Order {
@@ -73,24 +91,25 @@ export const MOCK_ORDERS: Order[] = [
 export function useCart() {
   const [items, setItems] = useState<Map<string, CartItem>>(new Map());
 
-  const updateQuantity = useCallback((product: Product, quantity: number) => {
+  const updateQuantity = useCallback((product: Product, quantity: number, sizeLabel?: string, sizeKg?: number, unitPrice?: number) => {
     setItems((prev) => {
       const next = new Map(prev);
+      const key = cartKey(product.id, sizeLabel);
       if (quantity <= 0) {
-        next.delete(product.id);
+        next.delete(key);
       } else {
-        next.set(product.id, { product, quantity });
+        next.set(key, { product, quantity, sizeLabel, sizeKg, unitPrice });
       }
       return next;
     });
   }, []);
 
   const hydrateCart = useCallback((cartItems: CartItem[]) => {
-    setItems(new Map(cartItems.map((item) => [item.product.id, item])));
+    setItems(new Map(cartItems.map((item) => [cartKey(item.product.id, item.sizeLabel), item])));
   }, []);
 
-  const getQuantity = useCallback((productId: string) => {
-    return items.get(productId)?.quantity ?? 0;
+  const getQuantity = useCallback((productId: string, sizeLabel?: string) => {
+    return items.get(cartKey(productId, sizeLabel))?.quantity ?? 0;
   }, [items]);
 
   const clearCart = useCallback(() => {
@@ -98,8 +117,24 @@ export function useCart() {
   }, []);
 
   const cartItems = useMemo(() => Array.from(items.values()), [items]);
-  const totalKg = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
-  const totalPrice = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity * item.product.pricePerKg, 0), [cartItems]);
+
+  const totalKg = useMemo(() =>
+    cartItems.reduce((sum, item) => {
+      const kg = item.sizeKg ? item.sizeKg * item.quantity : item.quantity;
+      return sum + kg;
+    }, 0),
+    [cartItems],
+  );
+
+  const totalPrice = useMemo(() =>
+    cartItems.reduce((sum, item) => {
+      const price = item.unitPrice
+        ? item.unitPrice * item.quantity
+        : item.quantity * item.product.pricePerKg;
+      return sum + price;
+    }, 0),
+    [cartItems],
+  );
 
   return useMemo(
     () => ({ items: cartItems, updateQuantity, hydrateCart, getQuantity, clearCart, totalKg, totalPrice }),

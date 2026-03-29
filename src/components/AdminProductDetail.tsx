@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { X, Upload, Plus, Loader2, AlertTriangle, Link2, Unlink2 } from "lucide-react";
+import { ProductVariantsEditor } from "./ProductVariantsEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -420,6 +421,13 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
                 maxLength={120}
               />
             </div>
+
+            {/* Bag Size Variants */}
+            <ProductVariantsEditor
+              productId={product.id}
+              productName={displayName}
+              basePricePerKg={displayPrice}
+            />
 
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border border-border p-3">

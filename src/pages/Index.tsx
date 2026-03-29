@@ -256,8 +256,12 @@ const Index = () => {
       product_id: item.product.id,
       product_name: item.product.name,
       product_sku: item.product.sku,
-      price_per_kg: item.product.pricePerKg,
-      quantity: item.quantity,
+      price_per_kg: item.unitPrice
+        ? item.unitPrice / (item.sizeKg ?? 1)
+        : item.product.pricePerKg,
+      quantity: item.sizeKg ? item.sizeKg * item.quantity : item.quantity,
+      size_label: item.sizeLabel ?? null,
+      size_kg: item.sizeKg ?? null,
     }));
 
     if (itemRows.length > 0) {
