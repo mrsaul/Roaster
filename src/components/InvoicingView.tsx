@@ -386,6 +386,14 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 <span className="text-lg font-semibold tabular-nums text-foreground">€{detailOrder.total_price.toFixed(2)}</span>
               </div>
 
+              {/* Missing Sellsy ID warning */}
+              {!detailOrder.has_sellsy_client_id && (
+                <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                  <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                  <p className="text-sm text-warning">This client has no Sellsy Client ID. Assign one in the Clients section before invoicing.</p>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex justify-end gap-2 pt-2">
                 {detailOrder.sellsy_id && (
@@ -395,7 +403,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                     </a>
                   </Button>
                 )}
-                {detailOrder.invoicing_status !== "sent" && (
+                {detailOrder.invoicing_status !== "sent" && detailOrder.has_sellsy_client_id && (
                   <Button
                     className="gap-2"
                     variant={detailOrder.invoicing_status === "error" ? "destructive" : "default"}
