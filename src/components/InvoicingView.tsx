@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import {
-  Send, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Search, X, Filter,
+  Send, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Search, X, Filter, AlertTriangle,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ export interface InvoicingOrder {
   sellsy_id: string | null;
   invoicing_status: InvoicingStatus;
   last_invoice_sync: string | null;
+  has_sellsy_client_id: boolean;
   items: { product_name: string; quantity: number; price_per_kg: number }[];
 }
 
@@ -247,7 +248,16 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                           />
                         </TableCell>
                         <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
-                        <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || "—"}</TableCell>
+                        <TableCell className="text-foreground text-sm">
+                          <span className="flex items-center gap-1.5">
+                            {order.client_name || order.user_email || "—"}
+                            {!order.has_sellsy_client_id && (
+                              <span title="No Sellsy Client ID — cannot invoice">
+                                <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d, yyyy")}</TableCell>
                         <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
                         <TableCell>
@@ -272,6 +282,10 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                                 </a>
                               </Button>
                             )
+                          ) : !order.has_sellsy_client_id ? (
+                            <span className="text-xs text-warning flex items-center gap-1" title="Assign a Sellsy Client ID to this client first">
+                              <AlertTriangle className="w-3.5 h-3.5" /> No Sellsy ID
+                            </span>
                           ) : (
                             <Button
                               size="sm"
@@ -372,6 +386,14 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                 <span className="text-lg font-semibold tabular-nums text-foreground">€{detailOrder.total_price.toFixed(2)}</span>
               </div>
 
+              {/* Missing Sellsy ID warning */}
+              {!detailOrder.has_sellsy_client_id && (
+                <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                  <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                  <p className="text-sm text-warning">This client has no Sellsy Client ID. Assign one in the Clients section before invoicing.</p>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex justify-end gap-2 pt-2">
                 {detailOrder.sellsy_id && (
@@ -381,7 +403,7 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                     </a>
                   </Button>
                 )}
-                {detailOrder.invoicing_status !== "sent" && (
+                {detailOrder.invoicing_status !== "sent" && detailOrder.has_sellsy_client_id && (
                   <Button
                     className="gap-2"
                     variant={detailOrder.invoicing_status === "error" ? "destructive" : "default"}

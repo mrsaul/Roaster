@@ -684,21 +684,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   /* ── Invoicing orders mapped ── */
   const invoicingOrders: InvoicingOrder[] = useMemo(() =>
-    adminOrders.map((o) => ({
-      id: o.id,
-      user_id: o.user_id,
-      client_name: o.client_name,
-      user_email: o.user_email,
-      delivery_date: o.delivery_date,
-      total_kg: o.total_kg,
-      total_price: o.total_price,
-      status: o.status,
-      sellsy_id: o.sellsy_id,
-      invoicing_status: o.invoicing_status,
-      last_invoice_sync: o.last_invoice_sync,
-      items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
-    })),
-    [adminOrders],
+    adminOrders.map((o) => {
+      const client = clients.find((c) => c.user_id === o.user_id);
+      return {
+        id: o.id,
+        user_id: o.user_id,
+        client_name: o.client_name,
+        user_email: o.user_email,
+        delivery_date: o.delivery_date,
+        total_kg: o.total_kg,
+        total_price: o.total_price,
+        status: o.status,
+        sellsy_id: o.sellsy_id,
+        invoicing_status: o.invoicing_status,
+        last_invoice_sync: o.last_invoice_sync,
+        has_sellsy_client_id: Boolean(client?.sellsy_client_id),
+        items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+      };
+    }),
+    [adminOrders, clients],
   );
 
   return (
