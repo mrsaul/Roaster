@@ -282,6 +282,10 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
                                 </a>
                               </Button>
                             )
+                          ) : !order.has_sellsy_client_id ? (
+                            <span className="text-xs text-warning flex items-center gap-1" title="Assign a Sellsy Client ID to this client first">
+                              <AlertTriangle className="w-3.5 h-3.5" /> No Sellsy ID
+                            </span>
                           ) : (
                             <Button
                               size="sm"
