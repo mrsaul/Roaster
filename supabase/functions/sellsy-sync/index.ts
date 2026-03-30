@@ -682,9 +682,14 @@ function buildSellsyOrderPayload(body: JsonRecord, user: AuthenticatedUser): Jso
     })),
   };
 
-  if (sellsyClientId) {
-    payload.related = [{ type: "company", id: Number(sellsyClientId) }];
+  if (!sellsyClientId) {
+    throw new Error(
+      "Cannot create Sellsy order: this client has no Sellsy Client ID. " +
+      "Please sync the client from Sellsy or assign a Sellsy Client ID in the client settings before invoicing."
+    );
   }
+
+  payload.related = [{ type: "company", id: Number(sellsyClientId) }];
 
   return payload;
 }
