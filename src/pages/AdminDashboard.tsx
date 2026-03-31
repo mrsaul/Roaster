@@ -128,7 +128,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
