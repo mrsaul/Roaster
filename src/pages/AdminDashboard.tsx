@@ -19,6 +19,7 @@ import { AdminProductDetail, type AdminProduct } from "@/components/AdminProduct
 import { AdminClientDetail, type AppClient } from "@/components/AdminClientDetail";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { ProfileSettingsView } from "@/components/ProfileSettingsView";
+import { AddProductDialog } from "@/components/AddProductDialog";
 import { PackagingView, type PackagingOrder } from "@/components/PackagingView";
 import { RoasterView, type RoasterOrder } from "@/components/RoasterView";
 import { Checkbox } from "@/components/ui/checkbox";
