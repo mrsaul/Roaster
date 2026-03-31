@@ -86,6 +86,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     setPhone(client.custom_phone ?? client.phone ?? "");
     setDeliveryAddress(client.custom_delivery_address ?? client.delivery_address ?? "");
     setPricingTier(client.custom_pricing_tier ?? client.pricing_tier ?? "standard");
+    setPricingTierId(client.pricing_tier_id ?? null);
   }
 
   const isSellsyMode = dataMode === "sellsy";
