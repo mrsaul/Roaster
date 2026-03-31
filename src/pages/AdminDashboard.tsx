@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
+import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
 import {
    LogOut, Users, Package, Coffee, BadgeEuro,
