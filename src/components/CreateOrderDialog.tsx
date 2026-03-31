@@ -98,7 +98,25 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     setDeliveryDate(undefined);
     setNotes("");
     setLineItems([]);
+    setClientTier(null);
   }, []);
+
+  // Load tier when client changes
+  const handleClientChange = useCallback(async (clientId: string) => {
+    setSelectedClientId(clientId);
+    const client = clients.find((c) => c.user_id === clientId);
+    if (client?.pricing_tier_id) {
+      const { data } = await supabase
+        .from("pricing_tiers")
+        .select("name, product_discount_percent, delivery_discount_percent")
+        .eq("id", client.pricing_tier_id)
+        .single();
+      if (data) setClientTier(data as { name: string; product_discount_percent: number; delivery_discount_percent: number });
+      else setClientTier(null);
+    } else {
+      setClientTier(null);
+    }
+  }, [clients]);
 
   const handleSave = useCallback(async () => {
     if (!selectedClientId) { toast({ title: "Select a client", variant: "destructive" }); return; }
