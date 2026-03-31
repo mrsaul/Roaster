@@ -457,6 +457,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
+  const [showCreateProduct, setShowCreateProduct] = useState(false);
 
   /* ── Load clients ── */
   const loadClients = async () => {
