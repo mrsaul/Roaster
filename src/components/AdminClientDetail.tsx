@@ -132,6 +132,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           custom_phone: dataMode === "custom" ? (phone || null) : null,
           custom_delivery_address: dataMode === "custom" ? (deliveryAddress || null) : null,
           custom_pricing_tier: dataMode === "custom" ? (pricingTier || null) : null,
+          pricing_tier_id: pricingTierId,
         })
         .eq("id", client.id);
       if (error) throw error;
