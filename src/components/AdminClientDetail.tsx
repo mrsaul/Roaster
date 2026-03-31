@@ -421,6 +421,34 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Tier change warning */}
+      <AlertDialog open={!!pendingTierChange} onOpenChange={(v) => !v && setPendingTierChange(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Change pricing tier?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will affect all future orders for this client. Existing orders will not be recalculated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (pendingTierChange) {
+                setPricingTierId(pendingTierChange);
+                const tier = tierOptions.find((t) => t.id === pendingTierChange);
+                if (tier) setPricingTier(tier.name);
+              }
+              setPendingTierChange(null);
+            }}>
+              Change Tier
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
