@@ -24,6 +24,7 @@ export type AppClient = {
   phone: string | null;
   delivery_address: string | null;
   pricing_tier: string | null;
+  pricing_tier_id: string | null;
   sellsy_client_id: string | null;
   onboarding_status: string | null;
   client_data_mode: "sellsy" | "custom";
@@ -36,6 +37,13 @@ export type AppClient = {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type PricingTierOption = {
+  id: string;
+  name: string;
+  product_discount_percent: number;
+  delivery_discount_percent: number;
 };
 
 interface Props {
