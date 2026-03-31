@@ -627,6 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
+    pricing: "Pricing",
     team: "Team",
     profile: "Profile Settings",
   };
