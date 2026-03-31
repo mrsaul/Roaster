@@ -1077,7 +1077,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2 self-start">
-                      <Button size="sm" className="gap-2" onClick={() => setShowAddProduct(true)}>
+                      <Button size="sm" className="gap-2" onClick={() => setShowCreateProduct(true)}>
                         <Plus className="w-4 h-4" /> Add Product
                       </Button>
                       <Button variant="outline" size="sm" className="gap-2" onClick={() => void runProductSync()} disabled={runningProductSync}>
