@@ -204,6 +204,15 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
                 ))}
               </SelectContent>
             </Select>
+            {clientTier && (
+              <div className="mt-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+                <span className="font-medium text-foreground">{clientTier.name}</span>
+                {clientTier.product_discount_percent > 0 && <span>{clientTier.product_discount_percent}% off products</span>}
+                {clientTier.delivery_discount_percent > 0 && (
+                  <span>· {clientTier.delivery_discount_percent === 100 ? "Free delivery" : `${clientTier.delivery_discount_percent}% off delivery`}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Delivery date */}
