@@ -1219,6 +1219,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </section>
             )}
 
+            {/* ═══════════ PRICING ═══════════ */}
+            {activeSection === "pricing" && <PricingTiersView />}
+
             {/* ═══════════ TEAM ═══════════ */}
             {activeSection === "team" && <UserManagementView />}
 
