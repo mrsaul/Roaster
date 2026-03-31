@@ -1483,6 +1483,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           email: c.email ?? null,
           custom_company_name: c.custom_company_name ?? null,
           client_data_mode: c.client_data_mode ?? "custom",
+          pricing_tier_id: c.pricing_tier_id ?? null,
         }))}
         products={products.map((p) => ({
           id: p.id,
