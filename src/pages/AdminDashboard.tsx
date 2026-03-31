@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
+import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
 import {
    LogOut, Users, Package, Coffee, BadgeEuro,
@@ -127,7 +128,7 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile">("orders");
+  const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -626,6 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
+    pricing: "Pricing",
     team: "Team",
     profile: "Profile Settings",
   };
@@ -645,6 +647,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
+    { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
     { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
   ];
@@ -1216,6 +1219,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </section>
             )}
 
+            {/* ═══════════ PRICING ═══════════ */}
+            {activeSection === "pricing" && <PricingTiersView />}
+
             {/* ═══════════ TEAM ═══════════ */}
             {activeSection === "team" && <UserManagementView />}
 
@@ -1477,6 +1483,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           email: c.email ?? null,
           custom_company_name: c.custom_company_name ?? null,
           client_data_mode: c.client_data_mode ?? "custom",
+          pricing_tier_id: c.pricing_tier_id ?? null,
         }))}
         products={products.map((p) => ({
           id: p.id,

@@ -45,6 +45,7 @@ export type Database = {
           phone: string | null
           preferred_delivery_days: string[] | null
           pricing_tier: string | null
+          pricing_tier_id: string | null
           sellsy_client_id: string | null
           siret: string | null
           updated_at: string
@@ -81,6 +82,7 @@ export type Database = {
           phone?: string | null
           preferred_delivery_days?: string[] | null
           pricing_tier?: string | null
+          pricing_tier_id?: string | null
           sellsy_client_id?: string | null
           siret?: string | null
           updated_at?: string
@@ -117,13 +119,22 @@ export type Database = {
           phone?: string | null
           preferred_delivery_days?: string[] | null
           pricing_tier?: string | null
+          pricing_tier_id?: string | null
           sellsy_client_id?: string | null
           siret?: string | null
           updated_at?: string
           user_id?: string
           vat_number?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "client_onboarding_pricing_tier_id_fkey"
+            columns: ["pricing_tier_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_items: {
         Row: {
@@ -215,12 +226,15 @@ export type Database = {
         Row: {
           created_at: string
           delivery_date: string
+          delivery_discount_percent: number
+          discount_percent: number
           id: string
           invoicing_status: string
           is_labeled: boolean
           is_packed: boolean
           is_roasted: boolean
           last_invoice_sync: string | null
+          pricing_tier_name: string | null
           sellsy_id: string | null
           status: string
           total_kg: number
@@ -231,12 +245,15 @@ export type Database = {
         Insert: {
           created_at?: string
           delivery_date: string
+          delivery_discount_percent?: number
+          discount_percent?: number
           id?: string
           invoicing_status?: string
           is_labeled?: boolean
           is_packed?: boolean
           is_roasted?: boolean
           last_invoice_sync?: string | null
+          pricing_tier_name?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
@@ -247,18 +264,54 @@ export type Database = {
         Update: {
           created_at?: string
           delivery_date?: string
+          delivery_discount_percent?: number
+          discount_percent?: number
           id?: string
           invoicing_status?: string
           is_labeled?: boolean
           is_packed?: boolean
           is_roasted?: boolean
           last_invoice_sync?: string | null
+          pricing_tier_name?: string | null
           sellsy_id?: string | null
           status?: string
           total_kg?: number
           total_price?: number
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      pricing_tiers: {
+        Row: {
+          created_at: string
+          delivery_discount_percent: number
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          product_discount_percent: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_discount_percent?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          product_discount_percent?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_discount_percent?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          product_discount_percent?: number
+          updated_at?: string
         }
         Relationships: []
       }

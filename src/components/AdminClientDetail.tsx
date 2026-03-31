@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link2, Unlink2, AlertTriangle, Loader2, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ export type AppClient = {
   phone: string | null;
   delivery_address: string | null;
   pricing_tier: string | null;
+  pricing_tier_id: string | null;
   sellsy_client_id: string | null;
   onboarding_status: string | null;
   client_data_mode: "sellsy" | "custom";
@@ -36,6 +37,13 @@ export type AppClient = {
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type PricingTierOption = {
+  id: string;
+  name: string;
+  product_discount_percent: number;
+  delivery_discount_percent: number;
 };
 
 interface Props {
@@ -55,9 +63,18 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
   const [phone, setPhone] = useState(client?.custom_phone ?? client?.phone ?? "");
   const [deliveryAddress, setDeliveryAddress] = useState(client?.custom_delivery_address ?? client?.delivery_address ?? "");
   const [pricingTier, setPricingTier] = useState(client?.custom_pricing_tier ?? client?.pricing_tier ?? "standard");
+  const [pricingTierId, setPricingTierId] = useState<string | null>(client?.pricing_tier_id ?? null);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
+  const [tierOptions, setTierOptions] = useState<PricingTierOption[]>([]);
+  const [pendingTierChange, setPendingTierChange] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
+      .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
+  }, [open]);
 
   const [lastClientId, setLastClientId] = useState<string | null>(null);
   if (client && client.id !== lastClientId) {
@@ -69,6 +86,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     setPhone(client.custom_phone ?? client.phone ?? "");
     setDeliveryAddress(client.custom_delivery_address ?? client.delivery_address ?? "");
     setPricingTier(client.custom_pricing_tier ?? client.pricing_tier ?? "standard");
+    setPricingTierId(client.pricing_tier_id ?? null);
   }
 
   const isSellsyMode = dataMode === "sellsy";
@@ -114,6 +132,7 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
           custom_phone: dataMode === "custom" ? (phone || null) : null,
           custom_delivery_address: dataMode === "custom" ? (deliveryAddress || null) : null,
           custom_pricing_tier: dataMode === "custom" ? (pricingTier || null) : null,
+          pricing_tier_id: pricingTierId,
         })
         .eq("id", client.id);
       if (error) throw error;
@@ -259,30 +278,67 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
                   <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
                 )}
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Pricing Tier</p>
                 {isSellsyMode ? (
                   <div className="rounded-lg bg-muted/40 p-3">
                     <p className="text-sm text-foreground capitalize">{client.pricing_tier ?? "standard"}</p>
                   </div>
-                ) : (
-                  <div className="flex gap-1.5">
-                    {["standard", "premium", "wholesale"].map((tier) => (
+                ) : tierOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
                       <button
-                        key={tier}
                         type="button"
-                        onClick={() => setPricingTier(tier)}
+                        onClick={() => { setPricingTierId(null); setPricingTier("standard"); }}
                         className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors capitalize",
-                          pricingTier === tier
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          !pricingTierId
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                         )}
                       >
-                        {tier}
+                        No tier (standard)
                       </button>
-                    ))}
+                      {tierOptions.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            if (pricingTierId && pricingTierId !== t.id) {
+                              setPendingTierChange(t.id);
+                            } else {
+                              setPricingTierId(t.id);
+                              setPricingTier(t.name);
+                            }
+                          }}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                            pricingTierId === t.id
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                          )}
+                        >
+                          {t.name}
+                          {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
+                        </button>
+                      ))}
+                    </div>
+                    {pricingTierId && (() => {
+                      const sel = tierOptions.find((t) => t.id === pricingTierId);
+                      if (!sel) return null;
+                      return (
+                        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
+                          {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
+                          {sel.delivery_discount_percent > 0 && (
+                            <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
                 )}
               </div>
             </div>
@@ -361,6 +417,34 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmModeSwitch}>
               {pendingModeSwitch === "custom" ? "Use Custom Override" : "Restore Sellsy Sync"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Tier change warning */}
+      <AlertDialog open={!!pendingTierChange} onOpenChange={(v) => !v && setPendingTierChange(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Change pricing tier?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will affect all future orders for this client. Existing orders will not be recalculated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (pendingTierChange) {
+                setPricingTierId(pendingTierChange);
+                const tier = tierOptions.find((t) => t.id === pendingTierChange);
+                if (tier) setPricingTier(tier.name);
+              }
+              setPendingTierChange(null);
+            }}>
+              Change Tier
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
