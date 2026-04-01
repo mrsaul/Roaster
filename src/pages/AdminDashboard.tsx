@@ -457,7 +457,23 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [showCreateProduct, setShowCreateProduct] = useState(false);
+   const [showCreateProduct, setShowCreateProduct] = useState(false);
+   const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
+
+   const deleteProduct = async (product: AdminProductRow) => {
+     try {
+       // Delete variants first, then product
+       await supabase.from("product_variants").delete().eq("product_id", product.id);
+       const { error } = await supabase.from("products").delete().eq("id", product.id);
+       if (error) throw error;
+       toast({ title: "Product deleted", description: `"${product.name}" has been removed.` });
+       void loadProducts();
+     } catch (err) {
+       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+     } finally {
+       setProductToDelete(null);
+     }
+   };
 
   /* ── Load clients ── */
   const loadClients = async () => {
@@ -1208,9 +1224,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   {isCustom && (
-                                    <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
+                                   <Badge variant="outline" className="text-[10px] border-accent text-accent-foreground">Override</Badge>
                                   )}
                                   <span className="text-muted-foreground">{product.is_active ? "Active" : "Archived"}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); setProductToDelete(product); }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1476,6 +1500,27 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         onOpenChange={setShowCreateProduct}
         onCreated={() => void loadProducts()}
       />
+
+      {/* ── Delete product confirmation ── */}
+      <AlertDialog open={!!productToDelete} onOpenChange={(open) => { if (!open) setProductToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{productToDelete?.name}" and all its size variants. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => productToDelete && deleteProduct(productToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Add client dialog ── */}
       <AddClientDialog
