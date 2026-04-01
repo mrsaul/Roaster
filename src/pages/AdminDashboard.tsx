@@ -457,7 +457,23 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [showCreateProduct, setShowCreateProduct] = useState(false);
+   const [showCreateProduct, setShowCreateProduct] = useState(false);
+   const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
+
+   const deleteProduct = async (product: AdminProductRow) => {
+     try {
+       // Delete variants first, then product
+       await supabase.from("product_variants").delete().eq("product_id", product.id);
+       const { error } = await supabase.from("products").delete().eq("id", product.id);
+       if (error) throw error;
+       toast({ title: "Product deleted", description: `"${product.name}" has been removed.` });
+       void loadProducts();
+     } catch (err) {
+       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+     } finally {
+       setProductToDelete(null);
+     }
+   };
 
   /* ── Load clients ── */
   const loadClients = async () => {
