@@ -459,6 +459,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [showCreateOrder, setShowCreateOrder] = useState(false);
    const [showCreateProduct, setShowCreateProduct] = useState(false);
    const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
+   const [clientToDelete, setClientToDelete] = useState<AppClient | null>(null);
+
+   const deleteClient = async (client: AppClient) => {
+     try {
+       const { error } = await supabase.from("client_onboarding").delete().eq("id", client.id);
+       if (error) throw error;
+       toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
+       void loadClients();
+     } catch (err) {
+       toast({ title: "Delete failed", description: String(err), variant: "destructive" });
+     } finally {
+       setClientToDelete(null);
+     }
+   };
 
    const deleteProduct = async (product: AdminProductRow) => {
      try {
@@ -1057,7 +1071,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   clients={clients}
                   loading={loadingClients}
                   error={clientError}
-                  onSelectClient={setSelectedClient}
+                   onSelectClient={setSelectedClient}
+                   onDeleteClient={setClientToDelete}
                 />
               </>
             )}
@@ -1515,6 +1530,27 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => productToDelete && deleteProduct(productToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete client confirmation ── */}
+      <AlertDialog open={!!clientToDelete} onOpenChange={(open) => { if (!open) setClientToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{clientToDelete?.company_name || clientToDelete?.contact_name || "this client"}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => clientToDelete && deleteClient(clientToDelete)}
             >
               Delete
             </AlertDialogAction>

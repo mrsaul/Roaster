@@ -1,0 +1,1 @@
+CREATE POLICY "Admins can delete clients" ON public.client_onboarding FOR DELETE TO authenticated USING (has_role(auth.uid(), 'admin'::app_role));

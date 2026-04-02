@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronRight, Users } from "lucide-react";
+import { AlertCircle, ChevronRight, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -16,6 +16,7 @@ interface AdminClientsSectionProps {
   loading: boolean;
   error: string | null;
   onSelectClient: (client: AppClient) => void;
+  onDeleteClient?: (client: AppClient) => void;
 }
 
 function resolveField(client: AppClient, field: "company_name" | "contact_name" | "email" | "phone" | "delivery_address" | "pricing_tier") {
@@ -27,7 +28,7 @@ function resolveField(client: AppClient, field: "company_name" | "contact_name" 
   return client[field] ?? "—";
 }
 
-export function AdminClientsSection({ clients, loading, error, onSelectClient }: AdminClientsSectionProps) {
+export function AdminClientsSection({ clients, loading, error, onSelectClient, onDeleteClient }: AdminClientsSectionProps) {
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2 mb-3">
@@ -112,10 +113,22 @@ export function AdminClientsSection({ clients, loading, error, onSelectClient }:
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="gap-2">
-                        Open
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {onDeleteClient && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); onDeleteClient(client); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="gap-2">
+                          Open
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
