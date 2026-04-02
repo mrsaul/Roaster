@@ -135,32 +135,60 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const payload = {
-        user_id: user.id,
-        company_name: data.company_name || null,
-        legal_company_name: data.legal_company_name || null,
-        vat_number: data.vat_number || null,
-        siret: data.siret || null,
-        contact_name: data.contact_name || null,
-        email: data.email || user.email || null,
-        phone: data.phone || null,
-        delivery_address: data.delivery_address || null,
-        delivery_instructions: data.delivery_instructions || null,
-        preferred_delivery_days: data.preferred_delivery_days,
-        delivery_time_window: data.delivery_time_window || null,
-        coffee_type: data.coffee_type || null,
-        estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
-        grinder_type: data.grinder_type || null,
-        notes: data.notes || null,
-        current_step: nextStep,
-        onboarding_status: status,
-      };
-
-      const { error } = await supabase
+      // Check if a row already exists for this user
+      const { data: existing } = await supabase
         .from("client_onboarding")
-        .upsert(payload, { onConflict: "user_id" });
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (existing) {
+        // Use the secure RPC function to update safe fields only
+        const { error } = await supabase.rpc("user_update_own_onboarding", {
+          _id: existing.id,
+          _company_name: data.company_name || null,
+          _legal_company_name: data.legal_company_name || null,
+          _vat_number: data.vat_number || null,
+          _siret: data.siret || null,
+          _contact_name: data.contact_name || null,
+          _email: data.email || user.email || null,
+          _phone: data.phone || null,
+          _delivery_address: data.delivery_address || null,
+          _delivery_instructions: data.delivery_instructions || null,
+          _preferred_delivery_days: data.preferred_delivery_days,
+          _delivery_time_window: data.delivery_time_window || null,
+          _coffee_type: data.coffee_type || null,
+          _estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
+          _grinder_type: data.grinder_type || null,
+          _notes: data.notes || null,
+          _current_step: nextStep,
+          ...(status === "completed" ? { _onboarding_status: "completed" } : {}),
+        });
+        if (error) throw error;
+      } else {
+        // First time: insert with onboarding_status
+        const { error } = await supabase.from("client_onboarding").insert({
+          user_id: user.id,
+          company_name: data.company_name || null,
+          legal_company_name: data.legal_company_name || null,
+          vat_number: data.vat_number || null,
+          siret: data.siret || null,
+          contact_name: data.contact_name || null,
+          email: data.email || user.email || null,
+          phone: data.phone || null,
+          delivery_address: data.delivery_address || null,
+          delivery_instructions: data.delivery_instructions || null,
+          preferred_delivery_days: data.preferred_delivery_days,
+          delivery_time_window: data.delivery_time_window || null,
+          coffee_type: data.coffee_type || null,
+          estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
+          grinder_type: data.grinder_type || null,
+          notes: data.notes || null,
+          current_step: nextStep,
+          onboarding_status: status,
+        });
+        if (error) throw error;
+      }
     } finally {
       setSaving(false);
     }
