@@ -1536,6 +1536,27 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* ── Delete client confirmation ── */}
+      <AlertDialog open={!!clientToDelete} onOpenChange={(open) => { if (!open) setClientToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{clientToDelete?.company_name || clientToDelete?.contact_name || "this client"}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => clientToDelete && deleteClient(clientToDelete)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Add client dialog ── */}
       <AddClientDialog
         open={showAddClient}
