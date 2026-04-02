@@ -162,6 +162,7 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
           _grinder_type: data.grinder_type || null,
           _notes: data.notes || null,
           _current_step: nextStep,
+          ...(status === "completed" ? { _onboarding_status: "completed" } : {}),
         });
         if (error) throw error;
       } else {
