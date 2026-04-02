@@ -1,0 +1,1 @@
+ALTER TABLE public.client_onboarding DROP CONSTRAINT client_onboarding_user_id_key;
