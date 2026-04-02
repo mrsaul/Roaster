@@ -534,33 +534,62 @@ export type Database = {
         }
         Returns: boolean
       }
-      user_update_own_onboarding: {
-        Args: {
-          _coffee_type?: string
-          _company_name?: string
-          _contact_name?: string
-          _current_step?: number
-          _custom_company_name?: string
-          _custom_contact_name?: string
-          _custom_delivery_address?: string
-          _custom_email?: string
-          _custom_phone?: string
-          _delivery_address?: string
-          _delivery_instructions?: string
-          _delivery_time_window?: string
-          _email?: string
-          _estimated_weekly_volume?: number
-          _grinder_type?: string
-          _id: string
-          _legal_company_name?: string
-          _notes?: string
-          _phone?: string
-          _preferred_delivery_days?: string[]
-          _siret?: string
-          _vat_number?: string
-        }
-        Returns: undefined
-      }
+      user_update_own_onboarding:
+        | {
+            Args: {
+              _coffee_type?: string
+              _company_name?: string
+              _contact_name?: string
+              _current_step?: number
+              _custom_company_name?: string
+              _custom_contact_name?: string
+              _custom_delivery_address?: string
+              _custom_email?: string
+              _custom_phone?: string
+              _delivery_address?: string
+              _delivery_instructions?: string
+              _delivery_time_window?: string
+              _email?: string
+              _estimated_weekly_volume?: number
+              _grinder_type?: string
+              _id: string
+              _legal_company_name?: string
+              _notes?: string
+              _phone?: string
+              _preferred_delivery_days?: string[]
+              _siret?: string
+              _vat_number?: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              _coffee_type?: string
+              _company_name?: string
+              _contact_name?: string
+              _current_step?: number
+              _custom_company_name?: string
+              _custom_contact_name?: string
+              _custom_delivery_address?: string
+              _custom_email?: string
+              _custom_phone?: string
+              _delivery_address?: string
+              _delivery_instructions?: string
+              _delivery_time_window?: string
+              _email?: string
+              _estimated_weekly_volume?: number
+              _grinder_type?: string
+              _id: string
+              _legal_company_name?: string
+              _notes?: string
+              _onboarding_status?: string
+              _phone?: string
+              _preferred_delivery_days?: string[]
+              _siret?: string
+              _vat_number?: string
+            }
+            Returns: undefined
+          }
     }
     Enums: {
       app_role: "admin" | "user" | "roaster" | "packaging"
