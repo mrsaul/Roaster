@@ -745,7 +745,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <div className="min-h-screen bg-background flex">
         {/* Sidebar */}
         <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-card p-6">
-          <h1 className="text-base font-medium text-foreground tracking-tight mb-1">PluralRoaster</h1>
+          <h1 className="text-base font-medium text-foreground tracking-tight mb-1">Plural Roaster</h1>
           <p className="text-xs text-muted-foreground mb-8">Admin Portal</p>
 
           <nav className="space-y-1 flex-1">
@@ -802,7 +802,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             {/* Mobile header */}
             <div className="flex lg:hidden items-center justify-between mb-6">
               <div>
-                <h1 className="text-base font-medium text-foreground">PluralRoaster</h1>
+                <h1 className="text-base font-medium text-foreground">Plural Roaster</h1>
                 <p className="text-xs text-muted-foreground">{sectionLabels[activeSection]}</p>
               </div>
             </div>
