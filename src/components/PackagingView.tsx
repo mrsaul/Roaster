@@ -112,7 +112,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
           variant={viewMode === "orders" ? "default" : "outline"}
           size="sm"
           onClick={() => setViewMode("orders")}
-          className="gap-1.5"
+          className={cn("gap-1.5", viewMode === "orders" && "bg-sky-700 hover:bg-sky-800 opacity-95")}
         >
           <CheckSquare className="w-4 h-4" /> Order view
         </Button>
@@ -120,7 +120,7 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
           variant={viewMode === "grouped" ? "default" : "outline"}
           size="sm"
           onClick={() => setViewMode("grouped")}
-          className="gap-1.5"
+          className={cn("gap-1.5", viewMode === "grouped" && "bg-sky-700 hover:bg-sky-800 opacity-95")}
         >
           <Layers className="w-4 h-4" /> Product grouping
         </Button>
