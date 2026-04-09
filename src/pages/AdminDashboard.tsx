@@ -871,7 +871,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button size="sm" className="gap-2" onClick={() => setShowCreateOrder(true)}>
+                    <Button size="sm" className="gap-2 bg-fuchsia-800 opacity-65" onClick={() => setShowCreateOrder(true)}>
                       <Plus className="w-4 h-4" /> New Order
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => void loadOrders()} className="gap-2">
