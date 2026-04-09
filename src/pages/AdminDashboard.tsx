@@ -248,7 +248,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const { error } = await supabase
         .from("orders")
-        .update({ [field]: value })
+        .update({ [field]: value } as { is_roasted?: boolean; is_packed?: boolean; is_labeled?: boolean })
         .eq("id", orderId);
       if (error) throw error;
 

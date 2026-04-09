@@ -63,7 +63,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
 
   const handleChecklistChange = useCallback(async (orderId: string, field: "is_roasted" | "is_packed" | "is_labeled", value: boolean) => {
     try {
-      const { error } = await supabase.from("orders").update({ [field]: value }).eq("id", orderId);
+      const { error } = await supabase.from("orders").update({ [field]: value } as { is_roasted?: boolean; is_packed?: boolean; is_labeled?: boolean }).eq("id", orderId);
       if (error) throw error;
       setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, [field]: value } : o));
     } catch (err) {
