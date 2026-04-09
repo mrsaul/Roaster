@@ -1059,7 +1059,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
                         <Plus className="h-4 w-4" /> Add New Client
                       </Button>
-                      <Button size="sm" className="gap-2" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                      <Button size="sm" className="gap-2 bg-amber-600 opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
                         <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
                         {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
                       </Button>
