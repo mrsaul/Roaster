@@ -13,9 +13,6 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -186,7 +183,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
           <DialogTitle>Create New Order</DialogTitle>
           <DialogDescription>Create an order on behalf of a client.</DialogDescription>
@@ -241,79 +238,69 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
           <div>
             <label className="text-sm font-medium text-foreground mb-1.5 block">Products</label>
             {lineItems.length > 0 && (
-              <div className="rounded-lg border border-border overflow-hidden mb-3">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty (kg)</TableHead>
-                      <TableHead className="text-right">€/kg</TableHead>
-                      <TableHead className="text-right">Subtotal</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lineItems.map((item) => (
-                      <TableRow key={item.product.id}>
-                        <TableCell className="font-medium text-foreground">{getProductLabel(item.product)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                              onClick={() => updateQty(item.product.id, -1)}
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                if (!isNaN(val) && val > 0) {
-                                  setLineItems((prev) => prev.map((i) =>
-                                    i.product.id === item.product.id ? { ...i, quantity: val } : i
-                                  ));
-                                }
-                              }}
-                              className="w-14 h-6 text-center text-sm tabular-nums px-1"
-                            />
-                            <button
-                              className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
-                              onClick={() => updateQty(item.product.id, 1)}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            value={item.price_per_kg}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              if (!isNaN(val)) updatePrice(item.product.id, val);
-                            }}
-                            className="w-20 h-6 text-right text-sm tabular-nums px-1"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground font-medium">
-                          €{(item.quantity * item.price_per_kg).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            className="w-7 h-7 rounded flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
-                            onClick={() => removeItem(item.product.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div className="space-y-2 mb-3">
+                {lineItems.map((item) => (
+                  <div key={item.product.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-foreground text-sm truncate flex-1">{getProductLabel(item.product)}</span>
+                      <button
+                        className="w-7 h-7 rounded flex-shrink-0 flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors"
+                        onClick={() => removeItem(item.product.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground mr-1">Qty</span>
+                        <button
+                          className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                          onClick={() => updateQty(item.product.id, -1)}
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val > 0) {
+                              setLineItems((prev) => prev.map((i) =>
+                                i.product.id === item.product.id ? { ...i, quantity: val } : i
+                              ));
+                            }
+                          }}
+                          className="w-12 h-6 text-center text-sm tabular-nums px-1"
+                        />
+                        <button
+                          className="w-6 h-6 rounded flex items-center justify-center border border-border text-muted-foreground hover:bg-muted transition-colors"
+                          onClick={() => updateQty(item.product.id, 1)}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs text-muted-foreground">kg</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">€/kg</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={item.price_per_kg}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) updatePrice(item.product.id, val);
+                          }}
+                          className="w-16 h-6 text-right text-sm tabular-nums px-1"
+                        />
+                      </div>
+                      <span className="ml-auto text-sm font-medium tabular-nums text-foreground">
+                        €{(item.quantity * item.price_per_kg).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
