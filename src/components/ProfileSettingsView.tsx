@@ -106,7 +106,6 @@ export function ProfileSettingsView() {
         setOriginalName(fullName);
       }
 
-      // Update email via auth if changed
       if (email !== originalEmail) {
         const { error } = await supabase.auth.updateUser({ email });
         if (error) throw error;
@@ -115,6 +114,8 @@ export function ProfileSettingsView() {
       } else {
         toast({ title: "Profile updated" });
       }
+      clearDraft();
+      setLastSavedAt(null);
     } catch (err: any) {
       toast({ title: "Error", description: err.message ?? "Failed to save profile", variant: "destructive" });
     } finally {
