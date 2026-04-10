@@ -157,9 +157,17 @@ export function ProfileSettingsView() {
 
   return (
     <div className="space-y-6 max-w-xl">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account information</p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
+          <p className="text-sm text-muted-foreground mt-1">Manage your account information</p>
+        </div>
+        {lastSavedAt && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground animate-in fade-in">
+            <Check className="w-3 h-3 text-green-500" />
+            Draft saved
+          </span>
+        )}
       </div>
 
       {/* Profile Info */}
