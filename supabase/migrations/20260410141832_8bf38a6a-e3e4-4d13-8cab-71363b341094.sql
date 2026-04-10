@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.user_update_own_onboarding(uuid, text, text, text, text, text, text, text, text, text, text[], text, text, text, numeric, text, integer, text, text, text, text, text);
