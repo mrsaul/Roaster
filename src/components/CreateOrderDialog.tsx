@@ -84,6 +84,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const [saving, setSaving] = useState(false);
   const [clientTier, setClientTier] = useState<{ name: string; product_discount_percent: number; delivery_discount_percent: number } | null>(null);
   const draftRestoredRef = useRef(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // Restore draft when dialog opens
   useEffect(() => {
