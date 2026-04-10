@@ -258,7 +258,15 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] mx-auto">
         <DialogHeader>
-          <DialogTitle>Create New Order</DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle>Create New Order</DialogTitle>
+            {lastSavedAt && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal animate-in fade-in">
+                <Check className="w-3 h-3 text-green-500" />
+                Draft saved
+              </span>
+            )}
+          </div>
           <DialogDescription>Create an order on behalf of a client.</DialogDescription>
         </DialogHeader>
 
