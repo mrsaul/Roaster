@@ -342,36 +342,36 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
 
           {/* Totals */}
           {lineItems.length > 0 && (
-            <div className="border-t border-border pt-3 space-y-1.5">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>{totalKg} kg total</span>
-                <span className="tabular-nums">Subtotal: €{subtotal.toFixed(2)}</span>
+            <div className="border-t border-border pt-2 space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{totalKg} kg</span>
+                <span className="tabular-nums">Subtotal €{subtotal.toFixed(2)}</span>
               </div>
               {clientTier && clientTier.product_discount_percent > 0 && (
-                <div className="flex items-center justify-between text-sm text-primary">
-                  <span>Discount ({clientTier.name} — {clientTier.product_discount_percent}%)</span>
+                <div className="flex items-center justify-between text-xs text-primary">
+                  <span>{clientTier.name} −{clientTier.product_discount_percent}%</span>
                   <span className="tabular-nums">−€{discountAmount.toFixed(2)}</span>
                 </div>
               )}
               {clientTier && clientTier.delivery_discount_percent > 0 && (
-                <div className="flex items-center justify-between text-sm text-primary">
+                <div className="flex items-center justify-between text-xs text-primary">
                   <span>Delivery</span>
                   <span>{clientTier.delivery_discount_percent === 100 ? "Free" : `${clientTier.delivery_discount_percent}% off`}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">Total</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
+                <span className="text-base font-semibold tabular-nums text-foreground">€{totalPrice.toFixed(2)}</span>
               </div>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }} disabled={saving}>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={() => { resetForm(); onOpenChange(false); }} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving} className="gap-2">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
               {saving ? "Creating…" : (
                 <>
                   <Plus className="w-4 h-4" /> Create Order
