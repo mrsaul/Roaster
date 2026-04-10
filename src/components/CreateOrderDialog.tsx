@@ -51,6 +51,30 @@ interface CreateOrderDialogProps {
   onCreated: () => void;
 }
 
+const DRAFT_KEY = "create_order_draft";
+
+type OrderDraft = {
+  selectedClientId: string;
+  deliveryDate: string | null;
+  notes: string;
+  lineItemIds: { productId: string; quantity: number; price_per_kg: number }[];
+  clientTier: { name: string; product_discount_percent: number; delivery_discount_percent: number } | null;
+  savedAt: number;
+};
+
+function saveDraftToStorage(draft: OrderDraft) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+function loadDraftFromStorage(): OrderDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) as OrderDraft : null;
+  } catch { return null; }
+}
+function clearDraftFromStorage() {
+  localStorage.removeItem(DRAFT_KEY);
+}
+
 export function CreateOrderDialog({ open, onOpenChange, clients, products, onCreated }: CreateOrderDialogProps) {
   const { toast } = useToast();
   const [selectedClientId, setSelectedClientId] = useState<string>("");
@@ -59,6 +83,51 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [clientTier, setClientTier] = useState<{ name: string; product_discount_percent: number; delivery_discount_percent: number } | null>(null);
+  const draftRestoredRef = useRef(false);
+
+  // Restore draft when dialog opens
+  useEffect(() => {
+    if (open && !draftRestoredRef.current) {
+      const draft = loadDraftFromStorage();
+      if (draft && products.length > 0) {
+        setSelectedClientId(draft.selectedClientId);
+        setDeliveryDate(draft.deliveryDate ? new Date(draft.deliveryDate) : undefined);
+        setNotes(draft.notes);
+        setClientTier(draft.clientTier);
+        const restored: LineItem[] = [];
+        for (const item of draft.lineItemIds) {
+          const product = products.find((p) => p.id === item.productId);
+          if (product) restored.push({ product, quantity: item.quantity, price_per_kg: item.price_per_kg });
+        }
+        setLineItems(restored);
+      }
+      draftRestoredRef.current = true;
+    }
+    if (!open) {
+      draftRestoredRef.current = false;
+    }
+  }, [open, products]);
+
+  // Auto-save draft on every change (debounced)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const hasContent = selectedClientId || deliveryDate || notes || lineItems.length > 0;
+      if (hasContent) {
+        saveDraftToStorage({
+          selectedClientId,
+          deliveryDate: deliveryDate ? deliveryDate.toISOString() : null,
+          notes,
+          lineItemIds: lineItems.map((i) => ({ productId: i.product.id, quantity: i.quantity, price_per_kg: i.price_per_kg })),
+          clientTier,
+          savedAt: Date.now(),
+        });
+      }
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [open, selectedClientId, deliveryDate, notes, lineItems, clientTier]);
 
   const activeProducts = useMemo(() => products.filter((p) => p.is_active), [products]);
 
@@ -96,6 +165,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     setNotes("");
     setLineItems([]);
     setClientTier(null);
+    clearDraftFromStorage();
   }, []);
 
   // Load tier when client changes
