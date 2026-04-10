@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Lock, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { User, Mail, Lock, Save, Loader2, CheckCircle2, Check } from "lucide-react";
+
+const PROFILE_DRAFT_KEY = "profile_settings_draft";
+
+type ProfileDraft = { fullName: string; email: string; savedAt: number };
+
+function saveDraft(d: ProfileDraft) {
+  try { localStorage.setItem(PROFILE_DRAFT_KEY, JSON.stringify(d)); } catch {}
+}
+function loadDraft(): ProfileDraft | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_DRAFT_KEY);
+    return raw ? JSON.parse(raw) as ProfileDraft : null;
+  } catch { return null; }
+}
+function clearDraft() { localStorage.removeItem(PROFILE_DRAFT_KEY); }
 
 export function ProfileSettingsView() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,24 +44,49 @@ export function ProfileSettingsView() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      setEmail(user.email ?? "");
-      setOriginalEmail(user.email ?? "");
-
+      const dbEmail = user.email ?? "";
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", user.id)
         .maybeSingle();
+      const dbName = profile?.full_name ?? "";
 
-      const name = profile?.full_name ?? "";
-      setFullName(name);
-      setOriginalName(name);
+      setOriginalEmail(dbEmail);
+      setOriginalName(dbName);
+
+      // Restore draft if it has unsaved edits
+      const draft = loadDraft();
+      if (draft && (draft.fullName !== dbName || draft.email !== dbEmail)) {
+        setFullName(draft.fullName);
+        setEmail(draft.email);
+        setLastSavedAt(draft.savedAt);
+      } else {
+        setFullName(dbName);
+        setEmail(dbEmail);
+        clearDraft();
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void loadProfile(); }, [loadProfile]);
+
+  // Auto-save draft on changes
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (loading) return;
+    const dirty = fullName !== originalName || email !== originalEmail;
+    if (!dirty) { clearDraft(); setLastSavedAt(null); return; }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const now = Date.now();
+      saveDraft({ fullName, email, savedAt: now });
+      setLastSavedAt(now);
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [fullName, email, originalName, originalEmail, loading]);
 
   const profileDirty = fullName !== originalName || email !== originalEmail;
 
@@ -65,7 +106,6 @@ export function ProfileSettingsView() {
         setOriginalName(fullName);
       }
 
-      // Update email via auth if changed
       if (email !== originalEmail) {
         const { error } = await supabase.auth.updateUser({ email });
         if (error) throw error;
@@ -74,6 +114,8 @@ export function ProfileSettingsView() {
       } else {
         toast({ title: "Profile updated" });
       }
+      clearDraft();
+      setLastSavedAt(null);
     } catch (err: any) {
       toast({ title: "Error", description: err.message ?? "Failed to save profile", variant: "destructive" });
     } finally {
@@ -115,9 +157,17 @@ export function ProfileSettingsView() {
 
   return (
     <div className="space-y-6 max-w-xl">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account information</p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Profile Settings</h2>
+          <p className="text-sm text-muted-foreground mt-1">Manage your account information</p>
+        </div>
+        {lastSavedAt && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground animate-in fade-in">
+            <Check className="w-3 h-3 text-green-500" />
+            Draft saved
+          </span>
+        )}
       </div>
 
       {/* Profile Info */}
