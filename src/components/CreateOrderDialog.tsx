@@ -117,14 +117,16 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     debounceRef.current = setTimeout(() => {
       const hasContent = selectedClientId || deliveryDate || notes || lineItems.length > 0;
       if (hasContent) {
+        const now = Date.now();
         saveDraftToStorage({
           selectedClientId,
           deliveryDate: deliveryDate ? deliveryDate.toISOString() : null,
           notes,
           lineItemIds: lineItems.map((i) => ({ productId: i.product.id, quantity: i.quantity, price_per_kg: i.price_per_kg })),
           clientTier,
-          savedAt: Date.now(),
+          savedAt: now,
         });
+        setLastSavedAt(now);
       }
     }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
