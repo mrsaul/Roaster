@@ -168,6 +168,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
     setNotes("");
     setLineItems([]);
     setClientTier(null);
+    setLastSavedAt(null);
     clearDraftFromStorage();
   }, []);
 
