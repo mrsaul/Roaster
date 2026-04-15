@@ -166,7 +166,8 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
 
       if (existing) {
         // Use the secure RPC function to update safe fields only
-        const { error } = await supabase.rpc("user_update_own_onboarding", {
+        // Only send _onboarding_status when completing to avoid "Invalid status transition"
+        const rpcArgs: Record<string, unknown> = {
           _id: existing.id,
           _company_name: data.company_name || null,
           _legal_company_name: data.legal_company_name || null,
@@ -184,8 +185,12 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
           _grinder_type: data.grinder_type || null,
           _notes: data.notes || null,
           _current_step: nextStep,
-          _onboarding_status: status,
-        });
+        };
+        // Only include status when it's changing (e.g., to "completed")
+        if (status !== "pending") {
+          rpcArgs._onboarding_status = status;
+        }
+        const { error } = await supabase.rpc("user_update_own_onboarding", rpcArgs as any);
         if (error) throw error;
       } else {
         // First time: insert with onboarding_status
