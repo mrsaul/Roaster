@@ -94,9 +94,19 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Filter out null values from existingData so they don't override empty-string defaults
+  const safeExisting: Partial<OnboardingData> = {};
+  if (existingData) {
+    for (const [key, val] of Object.entries(existingData)) {
+      if (val !== null && val !== undefined) {
+        (safeExisting as any)[key] = val;
+      }
+    }
+  }
+
   const initialData: OnboardingData = {
     ...INITIAL_DATA,
-    ...existingData,
+    ...safeExisting,
     preferred_delivery_days: existingData?.preferred_delivery_days ?? [],
     estimated_weekly_volume: String(existingData?.estimated_weekly_volume ?? ""),
   };
