@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -19,13 +17,14 @@ import {
   ArrowRight,
   ArrowLeft,
   Loader2,
+  Check,
 } from "lucide-react";
 
 const TOTAL_STEPS = 5;
 
 const DELIVERY_DAYS = [
-  { value: "tuesday", label: "Tuesday" },
-  { value: "friday", label: "Friday" },
+  { value: "tuesday", label: "Tue" },
+  { value: "friday", label: "Fri" },
 ];
 
 const TIME_WINDOWS = [
@@ -35,9 +34,9 @@ const TIME_WINDOWS = [
 ];
 
 const COFFEE_TYPES = [
-  { value: "espresso", label: "Espresso" },
-  { value: "filter", label: "Filter" },
-  { value: "both", label: "Both" },
+  { value: "espresso", label: "Espresso", icon: "☕" },
+  { value: "filter", label: "Filter", icon: "🫗" },
+  { value: "both", label: "Both", icon: "✨" },
 ];
 
 type OnboardingData = {
@@ -77,11 +76,11 @@ const INITIAL_DATA: OnboardingData = {
 };
 
 const STEP_META = [
-  { icon: Building2, title: "Business Information", desc: "Tell us about your company" },
-  { icon: Truck, title: "Delivery Details", desc: "Where and when should we deliver?" },
-  { icon: Coffee, title: "Ordering Preferences", desc: "Help us understand your needs" },
-  { icon: CreditCard, title: "Pricing & Terms", desc: "Your assigned pricing" },
-  { icon: CheckCircle2, title: "Confirmation", desc: "Review and activate your account" },
+  { icon: Building2, title: "Business", desc: "Tell us about your company" },
+  { icon: Truck, title: "Delivery", desc: "Where and when should we deliver?" },
+  { icon: Coffee, title: "Preferences", desc: "Help us understand your needs" },
+  { icon: CreditCard, title: "Pricing", desc: "Your assigned pricing" },
+  { icon: CheckCircle2, title: "Confirm", desc: "Review and activate your account" },
 ];
 
 interface OnboardingPageProps {
@@ -157,7 +156,6 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check if a row already exists for this user
       const { data: existing } = await supabase
         .from("client_onboarding")
         .select("id")
@@ -165,8 +163,6 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
         .maybeSingle();
 
       if (existing) {
-        // Use the secure RPC function to update safe fields only
-        // Only send _onboarding_status when completing to avoid "Invalid status transition"
         const rpcArgs: Record<string, unknown> = {
           _id: existing.id,
           _company_name: data.company_name || null,
@@ -186,14 +182,12 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
           _notes: data.notes || null,
           _current_step: nextStep,
         };
-        // Only include status when it's changing (e.g., to "completed")
         if (status !== "pending") {
           rpcArgs._onboarding_status = status;
         }
         const { error } = await supabase.rpc("user_update_own_onboarding", rpcArgs as any);
         if (error) throw error;
       } else {
-        // First time: insert with onboarding_status
         const { error } = await supabase.from("client_onboarding").insert({
           user_id: user.id,
           company_name: data.company_name || null,
@@ -243,7 +237,6 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
     onComplete();
   }, [saveProgress, clearDraft, onComplete]);
 
-  // Pre-fill email from auth
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email && !data.email) {
@@ -252,214 +245,91 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const progressPercent = (step / TOTAL_STEPS) * 100;
-  const StepIcon = STEP_META[step - 1].icon;
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <div className="border-b bg-card px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <h1 className="text-lg font-semibold text-foreground">Complete your profile</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Step {step} of {TOTAL_STEPS} — {STEP_META[step - 1].desc}
+      {/* Header with step indicator */}
+      <div className="bg-card border-b border-border sticky top-0 z-10">
+        <div className="max-w-lg mx-auto px-4 pt-5 pb-4">
+          <p className="text-xs font-medium text-primary tracking-wider uppercase mb-1">
+            Step {step} of {TOTAL_STEPS}
           </p>
-          <Progress value={progressPercent} className="mt-3 h-1.5" />
+          <h1 className="text-xl font-bold text-foreground tracking-tight">
+            {STEP_META[step - 1].title}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {STEP_META[step - 1].desc}
+          </p>
+
+          {/* Step dots */}
+          <div className="flex items-center gap-1.5 mt-4">
+            {STEP_META.map((_, i) => {
+              const stepNum = i + 1;
+              const isCompleted = stepNum < step;
+              const isCurrent = stepNum === step;
+              return (
+                <div
+                  key={i}
+                  className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                    isCompleted
+                      ? "bg-primary"
+                      : isCurrent
+                        ? "bg-primary/60"
+                        : "bg-border"
+                  }`}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-lg mx-auto space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-lg mx-auto px-4 py-6">
           {showDraftBanner && draftSavedAt && (
-            <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
-          )}
-          {/* Step icon */}
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <StepIcon className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="text-base font-semibold text-foreground">{STEP_META[step - 1].title}</h2>
-          </div>
-
-          {step === 1 && (
-            <div className="space-y-4">
-              <Field label="Company Name *" error={errors.company_name}>
-                <Input value={data.company_name} onChange={(e) => updateField("company_name", e.target.value)} placeholder="e.g. Café du Coin" />
-              </Field>
-              <Field label="Legal Company Name" hint="For invoicing purposes">
-                <Input value={data.legal_company_name} onChange={(e) => updateField("legal_company_name", e.target.value)} placeholder="e.g. SAS Café du Coin" />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="VAT Number">
-                  <Input value={data.vat_number} onChange={(e) => updateField("vat_number", e.target.value)} placeholder="FR12345678901" />
-                </Field>
-                <Field label="SIRET">
-                  <Input value={data.siret} onChange={(e) => updateField("siret", e.target.value)} placeholder="123 456 789 00012" />
-                </Field>
-              </div>
-              <Field label="Contact Name *" error={errors.contact_name}>
-                <Input value={data.contact_name} onChange={(e) => updateField("contact_name", e.target.value)} placeholder="Full name" />
-              </Field>
-              <Field label="Email">
-                <Input value={data.email} disabled className="opacity-60" />
-              </Field>
-              <Field label="Phone Number *" error={errors.phone}>
-                <Input value={data.phone} onChange={(e) => updateField("phone", e.target.value)} placeholder="+33 6 12 34 56 78" type="tel" />
-              </Field>
+            <div className="mb-5">
+              <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
             </div>
           )}
 
+          {step === 1 && <StepBusiness data={data} errors={errors} updateField={updateField} />}
           {step === 2 && (
-            <div className="space-y-4">
-              <Field label="Delivery Address *" error={errors.delivery_address}>
-                <Textarea value={data.delivery_address} onChange={(e) => updateField("delivery_address", e.target.value)} placeholder="Street, city, postal code" rows={3} />
-              </Field>
-              <Field label="Additional Instructions">
-                <Textarea value={data.delivery_instructions} onChange={(e) => updateField("delivery_instructions", e.target.value)} placeholder="Door code, floor, contact on site…" rows={2} />
-              </Field>
-              <Field label="Preferred Delivery Day(s)">
-                <div className="flex gap-3">
-                  {DELIVERY_DAYS.map((d) => (
-                    <button
-                      key={d.value}
-                      type="button"
-                      onClick={() => toggleDeliveryDay(d.value)}
-                      className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
-                        data.preferred_delivery_days.includes(d.value)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-card text-foreground border-border hover:bg-accent"
-                      }`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Delivery Time Window">
-                <div className="flex flex-wrap gap-2">
-                  {TIME_WINDOWS.map((tw) => (
-                    <button
-                      key={tw}
-                      type="button"
-                      onClick={() => updateField("delivery_time_window", tw)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-                        data.delivery_time_window === tw
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-card text-foreground border-border hover:bg-accent"
-                      }`}
-                    >
-                      {tw}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            </div>
+            <StepDelivery
+              data={data}
+              errors={errors}
+              updateField={updateField}
+              toggleDeliveryDay={toggleDeliveryDay}
+            />
           )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <Field label="Usual Coffee Type">
-                <div className="flex gap-3">
-                  {COFFEE_TYPES.map((ct) => (
-                    <button
-                      key={ct.value}
-                      type="button"
-                      onClick={() => updateField("coffee_type", ct.value)}
-                      className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium border transition-colors ${
-                        data.coffee_type === ct.value
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-card text-foreground border-border hover:bg-accent"
-                      }`}
-                    >
-                      {ct.label}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Estimated Weekly Volume (kg)">
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={data.estimated_weekly_volume}
-                  onChange={(e) => updateField("estimated_weekly_volume", e.target.value)}
-                  placeholder="e.g. 15"
-                />
-              </Field>
-              <Field label="Grinder Type" hint="Helps us recommend grind size">
-                <Input value={data.grinder_type} onChange={(e) => updateField("grinder_type", e.target.value)} placeholder="e.g. Mahlkönig EK43" />
-              </Field>
-              <Field label="Additional Notes">
-                <Textarea value={data.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Anything else we should know?" rows={3} />
-              </Field>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <InfoRow label="Pricing Tier" value="Standard" />
-                  <InfoRow label="Payment Terms" value="30 days" />
-                  <InfoRow label="Minimum Order" value="3 kg" />
-                </CardContent>
-              </Card>
-              <p className="text-xs text-muted-foreground">
-                Your pricing tier may be adjusted by the manager based on your order volume. Contact us for any specific arrangement.
-              </p>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">Business</h3>
-                  <InfoRow label="Company" value={data.company_name || "—"} />
-                  <InfoRow label="Contact" value={data.contact_name || "—"} />
-                  <InfoRow label="Phone" value={data.phone || "—"} />
-                  {data.vat_number && <InfoRow label="VAT" value={data.vat_number} />}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">Delivery</h3>
-                  <InfoRow label="Address" value={data.delivery_address || "—"} />
-                  {data.preferred_delivery_days.length > 0 && (
-                    <InfoRow label="Days" value={data.preferred_delivery_days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")} />
-                  )}
-                  {data.delivery_time_window && <InfoRow label="Time" value={data.delivery_time_window} />}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">Preferences</h3>
-                  {data.coffee_type && <InfoRow label="Coffee" value={data.coffee_type.charAt(0).toUpperCase() + data.coffee_type.slice(1)} />}
-                  {data.estimated_weekly_volume && <InfoRow label="Weekly volume" value={`${data.estimated_weekly_volume} kg`} />}
-                  {data.grinder_type && <InfoRow label="Grinder" value={data.grinder_type} />}
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          {step === 3 && <StepPreferences data={data} updateField={updateField} />}
+          {step === 4 && <StepPricing />}
+          {step === 5 && <StepConfirmation data={data} />}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="border-t bg-card px-4 py-4">
-        <div className="max-w-lg mx-auto flex gap-3">
+      <div className="border-t border-border bg-card/80 backdrop-blur-sm sticky bottom-0">
+        <div className="max-w-lg mx-auto px-4 py-3 flex gap-3">
           {step > 1 && (
-            <Button variant="outline" onClick={handleBack} className="flex-1">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back
+            <Button variant="outline" onClick={handleBack} className="flex-1 h-12 text-sm font-medium">
+              <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
             </Button>
           )}
           {step < TOTAL_STEPS ? (
-            <Button onClick={handleNext} disabled={saving} className="flex-1">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Next <ArrowRight className="h-4 w-4 ml-1" /></>}
+            <Button onClick={handleNext} disabled={saving} className="flex-1 h-12 text-sm font-medium">
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>Next <ArrowRight className="h-4 w-4 ml-1.5" /></>
+              )}
             </Button>
           ) : (
-            <Button onClick={handleConfirm} disabled={saving} className="flex-1">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Confirm & Activate <CheckCircle2 className="h-4 w-4 ml-1" /></>}
+            <Button onClick={handleConfirm} disabled={saving} className="flex-1 h-12 text-sm font-medium">
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>Confirm & Activate <CheckCircle2 className="h-4 w-4 ml-1.5" /></>
+              )}
             </Button>
           )}
         </div>
@@ -468,20 +338,350 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
   );
 };
 
-const Field = ({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) => (
-  <div className="space-y-1.5">
-    <Label className="text-sm font-medium text-foreground">{label}</Label>
-    {hint && <p className="text-xs text-muted-foreground -mt-1">{hint}</p>}
-    {children}
-    {error && <p className="text-xs text-destructive">{error}</p>}
+/* ─── Step Components ─── */
+
+type StepProps = {
+  data: OnboardingData;
+  errors?: Record<string, string>;
+  updateField?: <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => void;
+  toggleDeliveryDay?: (day: string) => void;
+};
+
+const StepBusiness = ({ data, errors = {}, updateField }: StepProps) => (
+  <div className="space-y-5">
+    <FieldGroup title="Company">
+      <Field label="Company Name" required error={errors.company_name}>
+        <Input
+          value={data.company_name}
+          onChange={(e) => updateField?.("company_name", e.target.value)}
+          placeholder="e.g. Café du Coin"
+          className="h-11"
+        />
+      </Field>
+      <Field label="Legal Name" hint="For invoicing">
+        <Input
+          value={data.legal_company_name}
+          onChange={(e) => updateField?.("legal_company_name", e.target.value)}
+          placeholder="e.g. SAS Café du Coin"
+          className="h-11"
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="VAT Number">
+          <Input
+            value={data.vat_number}
+            onChange={(e) => updateField?.("vat_number", e.target.value)}
+            placeholder="FR12345678901"
+            className="h-11"
+          />
+        </Field>
+        <Field label="SIRET">
+          <Input
+            value={data.siret}
+            onChange={(e) => updateField?.("siret", e.target.value)}
+            placeholder="123 456 789 00012"
+            className="h-11"
+          />
+        </Field>
+      </div>
+    </FieldGroup>
+
+    <FieldGroup title="Contact">
+      <Field label="Contact Name" required error={errors.contact_name}>
+        <Input
+          value={data.contact_name}
+          onChange={(e) => updateField?.("contact_name", e.target.value)}
+          placeholder="Full name"
+          className="h-11"
+        />
+      </Field>
+      <Field label="Email">
+        <Input value={data.email} disabled className="h-11 opacity-50 cursor-not-allowed" />
+      </Field>
+      <Field label="Phone" required error={errors.phone}>
+        <Input
+          value={data.phone}
+          onChange={(e) => updateField?.("phone", e.target.value)}
+          placeholder="+33 6 12 34 56 78"
+          type="tel"
+          className="h-11"
+        />
+      </Field>
+    </FieldGroup>
   </div>
 );
 
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex justify-between text-sm">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium text-foreground text-right max-w-[60%]">{value}</span>
+const StepDelivery = ({ data, errors = {}, updateField, toggleDeliveryDay }: StepProps) => (
+  <div className="space-y-5">
+    <FieldGroup title="Address">
+      <Field label="Delivery Address" required error={errors?.delivery_address}>
+        <Textarea
+          value={data.delivery_address}
+          onChange={(e) => updateField?.("delivery_address", e.target.value)}
+          placeholder="Street, city, postal code"
+          rows={3}
+          className="resize-none"
+        />
+      </Field>
+      <Field label="Instructions" hint="Door code, floor, contact on site…">
+        <Textarea
+          value={data.delivery_instructions}
+          onChange={(e) => updateField?.("delivery_instructions", e.target.value)}
+          placeholder="Any special instructions for our driver"
+          rows={2}
+          className="resize-none"
+        />
+      </Field>
+    </FieldGroup>
+
+    <FieldGroup title="Schedule">
+      <Field label="Preferred Day(s)">
+        <div className="flex gap-2">
+          {DELIVERY_DAYS.map((d) => {
+            const selected = data.preferred_delivery_days.includes(d.value);
+            return (
+              <button
+                key={d.value}
+                type="button"
+                onClick={() => toggleDeliveryDay?.(d.value)}
+                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 ${
+                  selected
+                    ? "bg-primary/10 text-primary border-primary shadow-sm"
+                    : "bg-card text-muted-foreground border-border hover:border-primary/30 hover:bg-accent"
+                }`}
+              >
+                {selected && <Check className="h-3.5 w-3.5" />}
+                {d.label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <Field label="Time Window">
+        <div className="flex flex-wrap gap-2">
+          {TIME_WINDOWS.map((tw) => {
+            const selected = data.delivery_time_window === tw;
+            return (
+              <button
+                key={tw}
+                type="button"
+                onClick={() => updateField?.("delivery_time_window", tw)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border-2 transition-all duration-200 ${
+                  selected
+                    ? "bg-primary/10 text-primary border-primary shadow-sm"
+                    : "bg-card text-muted-foreground border-border hover:border-primary/30 hover:bg-accent"
+                }`}
+              >
+                {tw}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+    </FieldGroup>
   </div>
+);
+
+const StepPreferences = ({ data, updateField }: StepProps) => (
+  <div className="space-y-5">
+    <FieldGroup title="Coffee">
+      <Field label="What type do you serve?">
+        <div className="grid grid-cols-3 gap-2">
+          {COFFEE_TYPES.map((ct) => {
+            const selected = data.coffee_type === ct.value;
+            return (
+              <button
+                key={ct.value}
+                type="button"
+                onClick={() => updateField?.("coffee_type", ct.value)}
+                className={`flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border-2 transition-all duration-200 ${
+                  selected
+                    ? "bg-primary/10 border-primary shadow-sm"
+                    : "bg-card border-border hover:border-primary/30 hover:bg-accent"
+                }`}
+              >
+                <span className="text-xl">{ct.icon}</span>
+                <span className={`text-sm font-medium ${selected ? "text-primary" : "text-foreground"}`}>
+                  {ct.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <Field label="Estimated Weekly Volume" hint="In kilograms">
+        <div className="relative">
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={data.estimated_weekly_volume}
+            onChange={(e) => updateField?.("estimated_weekly_volume", e.target.value)}
+            placeholder="e.g. 15"
+            className="h-11 pr-10"
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            kg
+          </span>
+        </div>
+      </Field>
+    </FieldGroup>
+
+    <FieldGroup title="Equipment">
+      <Field label="Grinder Type" hint="Helps us recommend grind size">
+        <Input
+          value={data.grinder_type}
+          onChange={(e) => updateField?.("grinder_type", e.target.value)}
+          placeholder="e.g. Mahlkönig EK43"
+          className="h-11"
+        />
+      </Field>
+      <Field label="Notes">
+        <Textarea
+          value={data.notes}
+          onChange={(e) => updateField?.("notes", e.target.value)}
+          placeholder="Anything else we should know?"
+          rows={3}
+          className="resize-none"
+        />
+      </Field>
+    </FieldGroup>
+  </div>
+);
+
+const StepPricing = () => (
+  <div className="space-y-5">
+    <Card className="border-2 border-primary/20 bg-primary/5">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <CreditCard className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-bold text-foreground">Your Plan</h3>
+        </div>
+        <div className="space-y-3">
+          <SummaryRow label="Pricing Tier" value="Standard" />
+          <SummaryRow label="Payment Terms" value="30 days" />
+          <SummaryRow label="Minimum Order" value="3 kg" highlight />
+        </div>
+      </CardContent>
+    </Card>
+    <p className="text-xs text-muted-foreground leading-relaxed px-1">
+      Your pricing tier may be adjusted based on order volume. Contact us for specific arrangements.
+    </p>
+  </div>
+);
+
+const StepConfirmation = ({ data }: { data: OnboardingData }) => (
+  <div className="space-y-4">
+    <ConfirmSection
+      icon={<Building2 className="h-4 w-4" />}
+      title="Business"
+      rows={[
+        { label: "Company", value: data.company_name },
+        { label: "Contact", value: data.contact_name },
+        { label: "Phone", value: data.phone },
+        ...(data.vat_number ? [{ label: "VAT", value: data.vat_number }] : []),
+      ]}
+    />
+    <ConfirmSection
+      icon={<Truck className="h-4 w-4" />}
+      title="Delivery"
+      rows={[
+        { label: "Address", value: data.delivery_address },
+        ...(data.preferred_delivery_days.length > 0
+          ? [{ label: "Days", value: data.preferred_delivery_days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") }]
+          : []),
+        ...(data.delivery_time_window ? [{ label: "Time", value: data.delivery_time_window }] : []),
+      ]}
+    />
+    <ConfirmSection
+      icon={<Coffee className="h-4 w-4" />}
+      title="Preferences"
+      rows={[
+        ...(data.coffee_type ? [{ label: "Coffee", value: data.coffee_type.charAt(0).toUpperCase() + data.coffee_type.slice(1) }] : []),
+        ...(data.estimated_weekly_volume ? [{ label: "Weekly volume", value: `${data.estimated_weekly_volume} kg` }] : []),
+        ...(data.grinder_type ? [{ label: "Grinder", value: data.grinder_type }] : []),
+      ]}
+    />
+  </div>
+);
+
+/* ─── Shared UI Primitives ─── */
+
+const FieldGroup = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="space-y-4">
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70 px-0.5">
+      {title}
+    </h3>
+    <div className="space-y-3.5">{children}</div>
+  </div>
+);
+
+const Field = ({
+  label,
+  hint,
+  error,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) => (
+  <div className="space-y-1.5">
+    <Label className="text-sm font-medium text-foreground flex items-center gap-1">
+      {label}
+      {required && <span className="text-destructive">*</span>}
+    </Label>
+    {hint && <p className="text-xs text-muted-foreground -mt-0.5">{hint}</p>}
+    {children}
+    {error && (
+      <p className="text-xs text-destructive flex items-center gap-1">
+        <span className="inline-block h-1 w-1 rounded-full bg-destructive" />
+        {error}
+      </p>
+    )}
+  </div>
+);
+
+const SummaryRow = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
+  <div className="flex items-center justify-between">
+    <span className="text-sm text-muted-foreground">{label}</span>
+    <span className={`text-sm font-semibold ${highlight ? "text-primary" : "text-foreground"}`}>
+      {value}
+    </span>
+  </div>
+);
+
+const ConfirmSection = ({
+  icon,
+  title,
+  rows,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  rows: { label: string; value: string }[];
+}) => (
+  <Card className="overflow-hidden">
+    <CardContent className="p-0">
+      <div className="flex items-center gap-2 px-4 py-3 bg-muted/50 border-b border-border">
+        <span className="text-primary">{icon}</span>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</h3>
+      </div>
+      <div className="px-4 py-3 space-y-2.5">
+        {rows.map((row, i) => (
+          <div key={i} className="flex justify-between text-sm gap-4">
+            <span className="text-muted-foreground shrink-0">{row.label}</span>
+            <span className="font-medium text-foreground text-right">{row.value || "—"}</span>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <p className="text-sm text-muted-foreground italic">No information provided</p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
 );
 
 export default OnboardingPage;
