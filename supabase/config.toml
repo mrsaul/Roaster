@@ -4,7 +4,7 @@ project_id = "wkffugaijomivqahnxom"
 verify_jwt = false
 
 [functions.export-invoicing-sheet]
-verify_jwt = true
+verify_jwt = false
 
 [functions.notify-new-order]
 verify_jwt = false
