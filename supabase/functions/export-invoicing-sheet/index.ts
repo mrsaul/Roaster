@@ -231,6 +231,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Fetch invoiceable orders for current month ───────────────────────────
+    // test:true (in body) widens the status filter so the Google connection
+    // can be verified even when no orders are ready_for_delivery/delivered.
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const testMode = body.test === true;
+
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       .toISOString()
@@ -239,6 +244,10 @@ Deno.serve(async (req: Request) => {
       .toISOString()
       .slice(0, 10);
 
+    const eligibleStatuses = testMode
+      ? ["received", "approved", "packaging", "ready_for_delivery", "delivered"]
+      : ["ready_for_delivery", "delivered"];
+
     const { data: ordersRaw, error: ordersErr } = await db
       .from("orders")
       .select(
@@ -246,7 +255,7 @@ Deno.serve(async (req: Request) => {
          invoicing_status,
          order_items ( product_name, product_sku, quantity, price_per_kg )`,
       )
-      .in("status", ["ready_for_delivery", "delivered"])
+      .in("status", eligibleStatuses)
       .gte("delivery_date", monthStart)
       .lte("delivery_date", monthEnd)
       .order("delivery_date");

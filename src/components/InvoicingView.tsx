@@ -73,10 +73,12 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const handleExportToSheets = async () => {
+  const handleExportToSheets = async (testMode = false) => {
     setExporting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("export-invoicing-sheet");
+      const { data, error } = await supabase.functions.invoke("export-invoicing-sheet", {
+        body: { test: testMode },
+      });
 
       // Extract the real error message from the function response body
       if (error) {
@@ -231,12 +233,24 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
               size="sm"
               className="gap-2"
               disabled={exporting}
-              onClick={() => void handleExportToSheets()}
+              onClick={() => void handleExportToSheets(false)}
             >
               {exporting
                 ? <RefreshCw className="w-4 h-4 animate-spin" />
                 : <Sheet className="w-4 h-4 text-green-600" />}
               {exporting ? "Exporting…" : "Export to Sheets"}
+            </Button>
+
+            {/* Test mode — all statuses, for verifying Google credentials */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground text-xs"
+              disabled={exporting}
+              onClick={() => void handleExportToSheets(true)}
+            >
+              {exporting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sheet className="w-3 h-3" />}
+              Test export
             </Button>
 
             {/* Link to last exported sheet */}
