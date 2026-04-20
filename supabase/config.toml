@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.export-invoicing-sheet]
 verify_jwt = true
+
+[functions.notify-new-order]
+verify_jwt = false

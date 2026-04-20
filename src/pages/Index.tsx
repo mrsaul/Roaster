@@ -231,13 +231,13 @@ const Index = () => {
     cart.updateQuantity(draftItem.product, Math.max(0, nextQuantity));
   }, [cart]);
 
-  const handleConfirmOrder = useCallback(async (deliveryDate: string) => {
+  const handleConfirmOrder = useCallback(async (deliveryDate: string, notes?: string): Promise<{ orderId: string }> => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return;
+      throw new Error("Not authenticated");
     }
 
     const payload = {
@@ -246,6 +246,8 @@ const Index = () => {
       total_kg: cart.totalKg,
       total_price: cart.totalPrice,
       status: "received" as const,
+      confirmed_at: new Date().toISOString(),
+      notes: notes ?? null,
     };
 
     const { data: createdOrder, error: orderError } = await supabase
@@ -282,10 +284,12 @@ const Index = () => {
       }
     }
 
-    await loadOrders();
+    // Refresh orders in background; CheckoutPage shows success screen, not Index
+    void loadOrders();
     setDraftDeliveryDate(null);
     cart.clearCart();
-    setView("home");
+
+    return { orderId: createdOrder.id };
   }, [cart, loadOrders, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {

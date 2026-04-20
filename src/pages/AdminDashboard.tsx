@@ -132,6 +132,7 @@ function formatDate(value: string | null) {
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [activeSection, setActiveSection] = useState<"orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock">("orders");
   const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
+  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
@@ -578,12 +579,31 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
-  /* ── Init ── */
+  /* ── Init + Realtime ── */
   useEffect(() => {
     void loadOrders();
     void loadClients();
     void loadProducts();
     void loadLatestProductSync();
+
+    // Subscribe to new orders in real-time
+    const channel = supabase
+      .channel("admin-new-orders")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        (payload) => {
+          const newId = (payload.new as { id: string }).id;
+          // Re-fetch to get full order with items + profile
+          void loadOrders();
+          setNewOrderIds((prev) => new Set([...prev, newId]));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [loadOrders]);
 
   /* ── Derived ── */
@@ -926,9 +946,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 "cursor-pointer transition-colors",
                                 order.status === "received" && "bg-primary/[0.03]",
                               )}
-                              onClick={() => setSelectedOrder(order)}
+                              onClick={() => {
+                                setSelectedOrder(order);
+                                setNewOrderIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(order.id);
+                                  return next;
+                                });
+                              }}
                             >
-                              <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
+                              <TableCell className="font-mono text-xs text-foreground">
+                                <span className="flex items-center gap-1.5">
+                                  {order.id.slice(0, 8)}
+                                  {newOrderIds.has(order.id) && (
+                                    <span className="inline-flex items-center rounded-full bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                                      New
+                                    </span>
+                                  )}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-muted-foreground">{format(parseISO(order.created_at), "MMM d, HH:mm")}</TableCell>
                               <TableCell className="text-foreground text-sm">{order.client_name || order.user_email || order.user_id.slice(0, 8) + "…"}</TableCell>
                               <TableCell className="text-muted-foreground">
