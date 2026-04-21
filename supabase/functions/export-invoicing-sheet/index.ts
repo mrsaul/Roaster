@@ -232,6 +232,7 @@ Deno.serve(async (req: Request) => {
     // can be verified even when no orders are ready_for_delivery/delivered.
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const testMode = body.test === true;
+    const bodySpreadsheetId = typeof body.spreadsheet_id === "string" ? body.spreadsheet_id.trim() : null;
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -298,16 +299,21 @@ Deno.serve(async (req: Request) => {
       spreadsheetUrl = existingExport.spreadsheet_url;
       await clearRange(token, spreadsheetId, "Orders");
       await clearRange(token, spreadsheetId, "Summary");
-    } else {
-      const created = await createSpreadsheet(token, sheetTitle);
-      spreadsheetId = created.id;
-      spreadsheetUrl = created.url;
+    } else if (bodySpreadsheetId) {
+      // First export for this month — use the sheet provided by the admin
+      spreadsheetId = bodySpreadsheetId;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
       await db.from("sheet_exports").insert({
         month_key: monthKey,
         spreadsheet_id: spreadsheetId,
         spreadsheet_url: spreadsheetUrl,
         orders_count: orders.length,
       });
+    } else {
+      throw new Error(
+        `No Google Sheet connected for ${monthLabel}. ` +
+        `Create a Google Sheet in your Drive, share it with the service account as Editor, then paste the URL in the "Connect a Google Sheet" field.`
+      );
     }
 
     // ── Build Orders tab ─────────────────────────────────────────────────────

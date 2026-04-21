@@ -71,13 +71,27 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
   const [bulkSending, setBulkSending] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const [sheetIdInput, setSheetIdInput] = useState("");
   const { toast } = useToast();
 
+  // Extract spreadsheet ID from a Google Sheets URL or plain ID
+  const parseSheetId = (input: string): string | null => {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    // Full URL: https://docs.google.com/spreadsheets/d/SHEET_ID/edit...
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return match[1];
+    // Plain ID (no slashes)
+    if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+    return null;
+  };
+
   const handleExportToSheets = async (testMode = false) => {
+    const spreadsheetId = parseSheetId(sheetIdInput) ?? undefined;
     setExporting(true);
     try {
       const { data, error } = await supabase.functions.invoke("export-invoicing-sheet", {
-        body: { test: testMode },
+        body: { test: testMode, spreadsheet_id: spreadsheetId },
       });
 
       // Extract the real error message from the function response body
@@ -194,6 +208,35 @@ export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, send
             <p className={cn("text-2xl font-medium tabular-nums", stats.error > 0 ? "text-destructive" : "text-foreground")}>{stats.error}</p>
           </div>
         </div>
+
+        {/* Google Sheets connect banner — shown until a sheet URL is returned */}
+        {!sheetUrl && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-start gap-3">
+              <Sheet className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground mb-1">Connect a Google Sheet</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Create a Google Sheet in your Drive, share it with the service account as <strong>Editor</strong>, then paste the URL below.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://docs.google.com/spreadsheets/d/…"
+                    value={sheetIdInput}
+                    onChange={(e) => setSheetIdInput(e.target.value)}
+                    className="text-sm flex-1"
+                  />
+                  {sheetIdInput && !parseSheetId(sheetIdInput) && (
+                    <p className="text-xs text-destructive self-center whitespace-nowrap">Invalid URL</p>
+                  )}
+                </div>
+                {parseSheetId(sheetIdInput) && (
+                  <p className="text-xs text-green-600 mt-1.5">✓ Sheet ID detected: {parseSheetId(sheetIdInput)}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
