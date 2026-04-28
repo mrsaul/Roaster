@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { X, Upload, Plus, Loader2, AlertTriangle, Link2, Unlink2, Save, CloudOff } from "lucide-react";
 import { ProductVariantsEditor } from "./ProductVariantsEditor";
 import { supabase } from "@/integrations/supabase/client";
@@ -106,9 +106,38 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
     setValue: setForm,
     clearDraft,
     discardDraft,
+    flushDraft,
     savedAt: draftSavedAt,
     showBanner: showDraftBanner,
   } = useDraftPersistence<ProductFormData>(draftKey, draftDefault);
+
+  // ── Flush draft to localStorage the instant the tab hides ─────────────────
+  // This guarantees that even if the user switches tabs within the 500ms
+  // debounce window, no keystrokes are lost.
+  useEffect(() => {
+    if (!open) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [open, flushDraft]);
+
+  // ── Warn the user before closing the browser tab / refreshing ─────────────
+  useEffect(() => {
+    if (!open) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges()) {
+        e.preventDefault();
+        // Modern browsers show their own generic message; setting returnValue
+        // is required for the dialog to appear at all.
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // hasChanges is stable via useCallback — safe to omit from deps
 
   const { imageUrl, tags, tastingNotes, isActive, process, origin, dataSourceMode, customName, customPrice } = form;
 

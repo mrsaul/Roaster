@@ -27,6 +27,11 @@ export interface DraftPersistenceResult<T> {
    * Call this when the user clicks "Discard" in the DraftBanner.
    */
   discardDraft: () => void;
+  /**
+   * Immediately flushes any pending debounced save to localStorage.
+   * Call this on visibilitychange (tab hide) to guarantee nothing is lost.
+   */
+  flushDraft: () => void;
   /** ISO string of when the draft was last written, or null if no draft exists. */
   savedAt: string | null;
   /**
@@ -34,6 +39,26 @@ export interface DraftPersistenceResult<T> {
    * editing yet (i.e. the DraftBanner should be visible).
    */
   showBanner: boolean;
+}
+
+// ─── Module-level userId cache ────────────────────────────────────────────────
+// Caching the userId at module scope means that after the very first
+// getSession() resolves (on app load), all subsequent formKey changes can
+// rebuild the storage key *synchronously* — eliminating the "reset then load"
+// flash that the async version produces.
+
+let _cachedUid: string | null = null;
+
+async function resolveUid(): Promise<string> {
+  if (_cachedUid !== null) return _cachedUid;
+  const { data: { session } } = await supabase.auth.getSession();
+  _cachedUid = session?.user?.id ?? "__anon__";
+  return _cachedUid;
+}
+
+/** Returns the cached userId synchronously, or null if not yet resolved. */
+export function getCachedUid(): string | null {
+  return _cachedUid;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -78,16 +103,13 @@ export function useDraftPersistence<T>(
 
   // ── 1. Re-initialize whenever formKey changes ──────────────────────────────
   // This runs on mount AND whenever the key changes (e.g. switching between
-  // clients in an edit dialog).
+  // products in an edit dialog).
+  //
+  // KEY IMPROVEMENT: if the userId is already cached from a previous run,
+  // we resolve the storage key and load the draft synchronously — no flash
+  // of DB/default values before the draft appears.
   useEffect(() => {
     let cancelled = false;
-
-    // Immediately reset to current defaultValue
-    setRawValue(defaultValueRef.current);
-    valueRef.current = defaultValueRef.current;
-    setSavedAt(null);
-    setShowBanner(false);
-    storageKeyRef.current = null;
 
     // Cancel any in-flight debounced save from the previous key
     if (debounceRef.current) {
@@ -95,29 +117,62 @@ export function useDraftPersistence<T>(
       debounceRef.current = null;
     }
 
-    // Resolve the userId, build the storage key, attempt draft load
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelled) return;
+    // Clear storage key so that any setValue calls during key resolution
+    // don't accidentally write to the old or wrong key.
+    storageKeyRef.current = null;
 
-      const uid = session?.user?.id ?? "__anon__";
+    const tryLoadFromStorage = (uid: string) => {
       const key = `draft:${formKey}:${uid}`;
       storageKeyRef.current = key;
-
       try {
         const raw = localStorage.getItem(key);
         if (raw) {
           const parsed: StoredDraft<T> = JSON.parse(raw);
           if (parsed?.data !== undefined && parsed?.savedAt) {
-            setRawValue(parsed.data);
-            valueRef.current = parsed.data;
-            setSavedAt(parsed.savedAt);
-            setShowBanner(true);
+            return parsed;
           }
         }
       } catch {
-        // Corrupted storage — fall back to defaultValue silently
+        // Corrupted storage — fall through to default
       }
-    });
+      return null;
+    };
+
+    const cachedUid = _cachedUid;
+
+    if (cachedUid !== null) {
+      // Fast path — synchronous, no flicker
+      const draft = tryLoadFromStorage(cachedUid);
+      if (draft) {
+        setRawValue(draft.data);
+        valueRef.current = draft.data;
+        setSavedAt(draft.savedAt);
+        setShowBanner(true);
+      } else {
+        setRawValue(defaultValueRef.current);
+        valueRef.current = defaultValueRef.current;
+        setSavedAt(null);
+        setShowBanner(false);
+      }
+    } else {
+      // Slow path — first load, must await getSession()
+      // Reset optimistically while we wait for the userId
+      setRawValue(defaultValueRef.current);
+      valueRef.current = defaultValueRef.current;
+      setSavedAt(null);
+      setShowBanner(false);
+
+      resolveUid().then((uid) => {
+        if (cancelled) return;
+        const draft = tryLoadFromStorage(uid);
+        if (draft) {
+          setRawValue(draft.data);
+          valueRef.current = draft.data;
+          setSavedAt(draft.savedAt);
+          setShowBanner(true);
+        }
+      });
+    }
 
     return () => {
       cancelled = true;
@@ -157,7 +212,25 @@ export function useDraftPersistence<T>(
     }
   }, []); // stable — all state interactions are via refs or stable React setter refs
 
-  // ── 3. clearDraft: remove from storage (call on successful submit) ─────────
+  // ── 3. flushDraft: save immediately (call on visibilitychange hidden) ───────
+  const flushDraft = useCallback(() => {
+    if (!storageKeyRef.current) return;
+    // Cancel the pending debounce and write immediately
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    try {
+      const now = new Date().toISOString();
+      const draft: StoredDraft<T> = { data: valueRef.current, savedAt: now };
+      localStorage.setItem(storageKeyRef.current, JSON.stringify(draft));
+      setSavedAt(now);
+    } catch {
+      // Storage quota exceeded or unavailable — ignore
+    }
+  }, []);
+
+  // ── 4. clearDraft: remove from storage (call on successful submit) ─────────
   const clearDraft = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (storageKeyRef.current) {
@@ -167,7 +240,7 @@ export function useDraftPersistence<T>(
     setShowBanner(false);
   }, []);
 
-  // ── 4. discardDraft: remove from storage + reset form (call on "Discard") ──
+  // ── 5. discardDraft: remove from storage + reset form (call on "Discard") ──
   const discardDraft = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (storageKeyRef.current) {
@@ -181,12 +254,12 @@ export function useDraftPersistence<T>(
     valueRef.current = resetVal;
   }, []);
 
-  // ── 5. Cleanup on unmount ──────────────────────────────────────────────────
+  // ── 6. Cleanup on unmount ──────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
 
-  return { value, setValue, clearDraft, discardDraft, savedAt, showBanner };
+  return { value, setValue, clearDraft, discardDraft, flushDraft, savedAt, showBanner };
 }

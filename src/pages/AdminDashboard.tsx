@@ -476,9 +476,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-   const [showCreateProduct, setShowCreateProduct] = useState(false);
-   const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
-   const [clientToDelete, setClientToDelete] = useState<AppClient | null>(null);
+  const [showCreateProduct, setShowCreateProduct] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<AdminProductRow | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<AppClient | null>(null);
+  // Decouple the dialog open/close state from the selected-product pointer.
+  // Keeping selectedProduct non-null while the dialog closes prevents the
+  // useDraftPersistence formKey from changing (which would reset the form).
+  const [productDetailOpen, setProductDetailOpen] = useState(false);
 
    const deleteClient = async (client: AppClient) => {
      try {
@@ -1369,7 +1373,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             <TableRow
                               key={product.id}
                               className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => setSelectedProduct(product as AdminProduct)}
+                              onClick={() => {
+                                setSelectedProduct(product as AdminProduct);
+                                setProductDetailOpen(true);
+                              }}
                             >
                               <TableCell>
                                 <div className="flex items-center gap-3">
@@ -1659,11 +1666,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       />
 
       {/* ── Product detail dialog ── */}
+      {/* selectedProduct is intentionally kept non-null while the dialog
+          closes so that useDraftPersistence's formKey stays stable and
+          the draft is never reset mid-close. */}
       <AdminProductDetail
         product={selectedProduct}
-        open={Boolean(selectedProduct)}
-        onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
-        onSaved={() => void loadProducts()}
+        open={productDetailOpen}
+        onOpenChange={(open) => {
+          setProductDetailOpen(open);
+          // Do NOT null selectedProduct here. Keep it alive so the draft key
+          // stays consistent until the user opens a different product.
+        }}
+        onSaved={() => {
+          setProductDetailOpen(false);
+          void loadProducts();
+        }}
       />
 
       {/* ── Add product dialog ── */}
