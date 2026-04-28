@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Order } from "@/lib/store";
 import { format, getDay, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { ClipboardList, House, ShoppingBag, X } from "lucide-react";
+import { House, ShoppingBag, UserCircle2, X } from "lucide-react";
 import { OrderCard } from "@/components/OrderCard";
 
 interface OrderHistoryPageProps {
@@ -22,7 +22,7 @@ interface OrderHistoryPageProps {
   onReorder: (order: Order) => void;
   onGoHome: () => void;
   onGoShop: () => void;
-  onViewOrders: () => void;
+  onGoAccount: () => void;
 }
 
 function getDefaultDeliveryCopy() {
@@ -59,7 +59,7 @@ export default function OrderHistoryPage({
   onReorder,
   onGoHome,
   onGoShop,
-  onViewOrders,
+  onGoAccount,
 }: OrderHistoryPageProps) {
   const [activeTab, setActiveTab] = useState<"in-progress" | "order-placed">("in-progress");
 
@@ -88,7 +88,7 @@ export default function OrderHistoryPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 px-4 pt-[max(20px,calc(env(safe-area-inset-top)+16px))] pb-3 backdrop-blur">
         <div className="mx-auto max-w-lg space-y-3">
           <div>
             <h1 className="text-base font-medium text-foreground">Orders</h1>
@@ -258,12 +258,11 @@ export default function OrderHistoryPage({
             Shop
           </button>
           <button
-            onClick={onViewOrders}
-            className="relative flex flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 py-3 text-sm font-medium text-foreground"
+            onClick={onGoAccount}
+            className="relative flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ClipboardList className="h-4 w-4" />
-            Orders
-            {draftItems.length > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-success" aria-hidden="true" /> : null}
+            <UserCircle2 className="h-4 w-4" />
+            Account
           </button>
         </div>
       </div>

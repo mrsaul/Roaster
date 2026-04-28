@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { CartBar } from "@/components/CartBar";
 import { ProductDetailSheet } from "@/components/ProductDetailSheet";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MOCK_PRODUCTS, type Product, type ProductVariant } from "@/lib/store";
+import { MOCK_PRODUCTS, type Product, type ProductVariant, type Order } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 import {
-  LogOut,
-  ClipboardList,
   House,
   ShoppingBag,
+  UserCircle2,
   RefreshCw,
   MapPin,
   Coffee,
   Search,
   X,
   ChevronRight,
+  Package,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
@@ -47,15 +49,13 @@ interface CatalogPageProps {
     sizeKg?: number;
     unitPrice?: number;
   }[];
-  lastOrderDate?: string | null;
-  lastOrderTotal?: number | null;
+  lastOrder?: Order | null;
   mode: "home" | "shop";
   onCheckout: () => void;
   onReorderLastOrder: () => void;
   onGoHome: () => void;
   onGoShop: () => void;
-  onViewOrders: () => void;
-  onLogout: () => void;
+  onGoAccount: () => void;
 }
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
@@ -213,15 +213,13 @@ function ProductCardSkeleton() {
 export default function CatalogPage({
   cart,
   usualOrderItems,
-  lastOrderDate,
-  lastOrderTotal,
+  lastOrder,
   mode,
   onCheckout,
   onReorderLastOrder,
   onGoHome,
   onGoShop,
-  onViewOrders,
-  onLogout,
+  onGoAccount,
 }: CatalogPageProps) {
   // Products
   const [products, setProducts] = useState<Product[]>([]);
@@ -352,25 +350,21 @@ export default function CatalogPage({
     [cart],
   );
 
-  // ── Suppress unused-prop warnings (kept for interface stability) ──────────
-  void lastOrderDate;
-  void lastOrderTotal;
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
 
-      {/* ── Sticky header + search + filters ── */}
+      {/* ── Sticky header ── */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-lg border-b border-border">
 
-        {/* Top bar */}
-        <div className="px-4 pt-3 pb-2">
+        {/* Top bar — always visible */}
+        <div className="px-4 pt-[max(20px,calc(env(safe-area-inset-top)+16px))] pb-2">
           <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
             <div>
               <h1 className="text-base font-semibold tracking-tight text-foreground">
-                PluralRoaster
+                {mode === "home" ? "Home" : "Shop"}
               </h1>
-              {!loadingProducts && (
+              {mode === "shop" && !loadingProducts && (
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   {filteredProducts.length}{" "}
                   {filteredProducts.length === 1 ? "coffee" : "coffees"} available
@@ -378,134 +372,216 @@ export default function CatalogPage({
               )}
             </div>
             <div className="flex items-center gap-1">
+              {mode === "shop" && (
+                <button
+                  type="button"
+                  onClick={() => void loadProducts()}
+                  disabled={loadingProducts}
+                  className="p-2 rounded-full transition-colors hover:bg-muted disabled:opacity-40"
+                  aria-label="Refresh catalog"
+                >
+                  <RefreshCw
+                    className={cn("w-4 h-4 text-muted-foreground", loadingProducts && "animate-spin")}
+                  />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => void loadProducts()}
-                disabled={loadingProducts}
-                className="p-2 rounded-full transition-colors hover:bg-muted disabled:opacity-40"
-                aria-label="Refresh catalog"
-              >
-                <RefreshCw
-                  className={cn("w-4 h-4 text-muted-foreground", loadingProducts && "animate-spin")}
-                />
-              </button>
-              <button
-                type="button"
-                onClick={onLogout}
+                onClick={onGoAccount}
                 className="p-2 rounded-full transition-colors hover:bg-muted"
-                aria-label="Logout"
+                aria-label="Account"
               >
-                <LogOut className="w-4 h-4 text-muted-foreground" />
+                <UserCircle2 className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Search input */}
-        <div className="px-4 pb-2">
-          <div className="max-w-lg mx-auto relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="search"
-              placeholder="Search by name, origin or tasting notes…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-border bg-muted/50 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Roast filter pills */}
-        <div className="px-4 pb-3">
-          <div className="max-w-lg mx-auto flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <button
-              type="button"
-              onClick={() => setActiveRoasts(new Set())}
-              className={cn(
-                "flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
-                activeRoasts.size === 0
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground",
-              )}
-            >
-              All
-            </button>
-            {ROAST_OPTIONS.map((roast) => (
-              <button
-                key={roast}
-                type="button"
-                onClick={() => toggleRoast(roast)}
-                className={cn(
-                  "flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors whitespace-nowrap",
-                  activeRoasts.has(roast)
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:text-foreground",
+        {/* Search + filters — Shop mode only */}
+        {mode === "shop" && (
+          <>
+            <div className="px-4 pb-2">
+              <div className="max-w-lg mx-auto relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="search"
+                  placeholder="Search by name, origin or tasting notes…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-muted/50 pl-9 pr-9 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
-              >
-                {roast}
-              </button>
-            ))}
-          </div>
-        </div>
+              </div>
+            </div>
+
+            <div className="px-4 pb-3">
+              <div className="max-w-lg mx-auto flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <button
+                  type="button"
+                  onClick={() => setActiveRoasts(new Set())}
+                  className={cn(
+                    "flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                    activeRoasts.size === 0
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  All
+                </button>
+                {ROAST_OPTIONS.map((roast) => (
+                  <button
+                    key={roast}
+                    type="button"
+                    onClick={() => toggleRoast(roast)}
+                    className={cn(
+                      "flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors whitespace-nowrap",
+                      activeRoasts.has(roast)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {roast}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Main content ── */}
       <main className="max-w-lg mx-auto px-4 pt-4 pb-48">
 
-        {/* Quick reorder section — hidden when searching or filtering */}
-        {usualOrderItems.length > 0 && !hasActiveFilters && (
-          <section className="mb-5">
-            <div className="flex items-center justify-between mb-2.5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Reorder from last order
+        {/* ── HOME DASHBOARD ── */}
+        {mode === "home" && (
+          <div className="space-y-5 mb-6">
+
+            {/* Last order card */}
+            {lastOrder ? (
+              <section>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Last order
+                </p>
+                <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">
+                        {lastOrder.items.length} {lastOrder.items.length === 1 ? "product" : "products"} · €{lastOrder.totalPrice.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {format(new Date(lastOrder.createdAt), "d MMM yyyy")}
+                        {" · "}Delivery {format(new Date(lastOrder.deliveryDate), "d MMM")}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
+                        {lastOrder.items.map((i) => i.product.name).join(", ")}
+                      </p>
+                    </div>
+                    <StatusBadge status={lastOrder.status} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={onReorderLastOrder}
+                      className="flex-1 rounded-xl bg-primary text-primary-foreground text-xs font-semibold py-2.5 hover:bg-primary/90 transition-colors"
+                    >
+                      Repeat order
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onGoAccount}
+                      className="flex items-center gap-1 rounded-xl border border-border bg-muted/40 text-xs font-medium text-foreground px-3 py-2.5 hover:bg-muted transition-colors"
+                    >
+                      History
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <section>
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+                  <Package className="w-7 h-7 mx-auto text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">No orders yet.</p>
+                  <button
+                    type="button"
+                    onClick={onGoShop}
+                    className="mt-3 rounded-full bg-primary text-primary-foreground text-xs font-semibold px-4 py-2 hover:bg-primary/90 transition-colors"
+                  >
+                    Browse catalog
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {/* Quick reorder */}
+            {usualOrderItems.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Quick reorder
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onReorderLastOrder}
+                    className="flex items-center gap-0.5 text-xs font-semibold text-primary"
+                  >
+                    Reorder all
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="-mx-4 px-4 flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  {usualOrderItems.map(({ product, quantity, sizeLabel }) => {
+                    const badge = getCartBadge(product);
+                    return (
+                      <button
+                        key={`${product.id}::${sizeLabel ?? ""}`}
+                        type="button"
+                        onClick={() => openProduct(product)}
+                        className="relative flex-shrink-0 w-36 rounded-xl border border-border bg-card p-3 text-left active:scale-[0.97] transition-transform duration-100"
+                      >
+                        {badge > 0 && (
+                          <span className="absolute top-2 right-2 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center px-1">
+                            {badge}
+                          </span>
+                        )}
+                        <p className="text-[12px] font-semibold text-foreground leading-tight line-clamp-2 pr-5">
+                          {product.name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Last: ×{quantity}{sizeLabel ? ` ${sizeLabel}` : ""}
+                        </p>
+                        <p className="mt-2 text-[11px] font-semibold text-primary">+ Add</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Featured coffees heading */}
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Our coffees
               </p>
               <button
                 type="button"
-                onClick={onReorderLastOrder}
+                onClick={onGoShop}
                 className="flex items-center gap-0.5 text-xs font-semibold text-primary"
               >
-                Reorder all
+                Browse all
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="-mx-4 px-4 flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {usualOrderItems.map(({ product, quantity, sizeLabel }) => {
-                const badge = getCartBadge(product);
-                return (
-                  <button
-                    key={`${product.id}::${sizeLabel ?? ""}`}
-                    type="button"
-                    onClick={() => openProduct(product)}
-                    className="relative flex-shrink-0 w-36 rounded-xl border border-border bg-card p-3 text-left active:scale-[0.97] transition-transform duration-100"
-                  >
-                    {badge > 0 && (
-                      <span className="absolute top-2 right-2 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center px-1">
-                        {badge}
-                      </span>
-                    )}
-                    <p className="text-[12px] font-semibold text-foreground leading-tight line-clamp-2 pr-5">
-                      {product.name}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Last: ×{quantity}
-                      {sizeLabel ? ` ${sizeLabel}` : ""}
-                    </p>
-                    <p className="mt-2 text-[11px] font-semibold text-primary">+ Add</p>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          </div>
         )}
 
         {/* Product grid */}
@@ -584,9 +660,9 @@ export default function CatalogPage({
         <div className="max-w-lg mx-auto flex items-center justify-between rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-lg supports-[backdrop-filter]:bg-card/85 pointer-events-auto">
           {(
             [
-              { label: "Home",   icon: House,        onClick: onGoHome,      active: mode === "home" },
-              { label: "Shop",   icon: ShoppingBag,  onClick: onGoShop,      active: mode === "shop" },
-              { label: "Orders", icon: ClipboardList, onClick: onViewOrders, active: false },
+              { label: "Home",    icon: House,        onClick: onGoHome,    active: mode === "home" },
+              { label: "Shop",    icon: ShoppingBag,  onClick: onGoShop,    active: mode === "shop" },
+              { label: "Account", icon: UserCircle2,  onClick: onGoAccount, active: false },
             ] as const
           ).map(({ label, icon: Icon, onClick, active }) => (
             <button

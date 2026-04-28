@@ -213,12 +213,12 @@ export default function CheckoutPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border px-4 pt-[max(20px,calc(env(safe-area-inset-top)+16px))] pb-3">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <button
             onClick={onBack}
             disabled={submitting}
-            className="p-1 rounded-lg hover:bg-muted transition-colors"
+            className="w-11 h-11 -ml-2 rounded-xl flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>

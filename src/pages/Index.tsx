@@ -6,13 +6,14 @@ const LoginPage = lazy(() => import("./LoginPage"));
 const CatalogPage = lazy(() => import("./CatalogPage"));
 const CheckoutPage = lazy(() => import("./CheckoutPage"));
 const OrderHistoryPage = lazy(() => import("./OrderHistoryPage"));
+const AccountPage = lazy(() => import("./AccountPage"));
 const AdminDashboard = lazy(() => import("./AdminDashboard"));
 const RoasterDashboard = lazy(() => import("./RoasterDashboard"));
 const PackagingDashboard = lazy(() => import("./PackagingDashboard"));
 const OnboardingPage = lazy(() => import("./OnboardingPage"));
 import { supabase } from "@/integrations/supabase/client";
 
-type View = "home" | "shop" | "checkout" | "orders" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
+type View = "home" | "shop" | "checkout" | "orders" | "account" | "admin" | "roaster_dashboard" | "packaging_dashboard" | "onboarding";
 type AppRole = "admin" | "user" | "roaster" | "packaging";
 
 // ── View persistence (sessionStorage) ────────────────────────────────────────
@@ -21,7 +22,7 @@ type AppRole = "admin" | "user" | "roaster" | "packaging";
 const VIEW_KEY = "pr_view";
 
 // Views that are safe to restore per role on initial load
-const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders"];
+const RESTORABLE_CLIENT_VIEWS: View[] = ["home", "shop", "orders", "account"];
 
 function saveView(v: View): void {
   try { sessionStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
@@ -371,8 +372,6 @@ const Index = () => {
   }, [cart, setView]);
 
   const usualOrderItems: CartItem[] = orders[0]?.items ?? [];
-  const lastOrderDate = orders[0]?.createdAt ?? null;
-  const lastOrderTotal = orders[0]?.totalPrice ?? null;
   const visibleOrders = role === "admin" ? [...orders, ...MOCK_ORDERS] : orders;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -428,15 +427,13 @@ const Index = () => {
           <CatalogPage
             cart={cart}
             usualOrderItems={usualOrderItems}
-            lastOrderDate={lastOrderDate}
-            lastOrderTotal={lastOrderTotal}
+            lastOrder={orders[0] ?? null}
             mode="home"
             onCheckout={() => setView("checkout")}
-            onReorderLastOrder={() => setView("checkout")}
+            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("checkout"); }}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
-            onViewOrders={() => setView("orders")}
-            onLogout={handleLogout}
+            onGoAccount={() => setView("account")}
           />
         </Suspense>
       );
@@ -446,15 +443,13 @@ const Index = () => {
           <CatalogPage
             cart={cart}
             usualOrderItems={usualOrderItems}
-            lastOrderDate={lastOrderDate}
-            lastOrderTotal={lastOrderTotal}
+            lastOrder={orders[0] ?? null}
             mode="shop"
             onCheckout={() => setView("checkout")}
-            onReorderLastOrder={() => setView("checkout")}
+            onReorderLastOrder={() => { cart.hydrateCart(orders[0]?.items ?? []); setView("checkout"); }}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
-            onViewOrders={() => setView("orders")}
-            onLogout={handleLogout}
+            onGoAccount={() => setView("account")}
           />
         </Suspense>
       );
@@ -486,7 +481,19 @@ const Index = () => {
             onReorder={handleReorder}
             onGoHome={() => setView("home")}
             onGoShop={() => setView("shop")}
-            onViewOrders={() => setView("orders")}
+            onGoAccount={() => setView("account")}
+          />
+        </Suspense>
+      );
+    case "account":
+      return (
+        <Suspense fallback={fallback}>
+          <AccountPage
+            orders={visibleOrders}
+            onGoHome={() => setView("home")}
+            onGoShop={() => setView("shop")}
+            onGoAccount={() => setView("account")}
+            onLogout={handleLogout}
           />
         </Suspense>
       );
