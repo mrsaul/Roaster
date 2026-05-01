@@ -180,6 +180,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [runningProductSync, setRunningProductSync] = useState(false);
   const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   const [syncRunError, setSyncRunError] = useState<string | null>(null);
+  const [runningHealthCheck, setRunningHealthCheck] = useState(false);
+  const [healthCheckResult, setHealthCheckResult] = useState<{
+    success: boolean;
+    checks: Record<string, { ok: boolean; detail?: string; latency_ms?: number }>;
+  } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
 
   const { toast } = useToast();
@@ -603,6 +608,30 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       toast({ title: "Client sync failed", description: msg, variant: "destructive" });
     } finally {
       setRunningClientSync(false);
+    }
+  };
+
+  const runHealthCheck = async () => {
+    setRunningHealthCheck(true);
+    setHealthCheckResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "health-check" },
+      });
+      if (error) throw new Error(error.message);
+      setHealthCheckResult(data);
+      toast({
+        title: data?.success ? "Sellsy connection OK" : "Sellsy connection issue",
+        description: data?.success
+          ? "All checks passed — Sellsy API is reachable."
+          : "One or more checks failed. See details below.",
+        variant: data?.success ? "default" : "destructive",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Health check failed", description: msg, variant: "destructive" });
+    } finally {
+      setRunningHealthCheck(false);
     }
   };
 
@@ -1276,8 +1305,46 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadLatestProductSync()} disabled={runningProductSync}>
                         <RefreshCw className="h-4 w-4" /> refresh status
                       </Button>
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => void runHealthCheck()} disabled={runningHealthCheck}>
+                        {runningHealthCheck
+                          ? <><RefreshCw className="h-4 w-4 animate-spin" /> checking…</>
+                          : <><CheckCircle2 className="h-4 w-4" /> health check</>}
+                      </Button>
                     </div>
                   </div>
+
+                  {/* Health check result panel */}
+                  {healthCheckResult && (
+                    <div className={cn(
+                      "mt-4 rounded-lg border px-4 py-3",
+                      healthCheckResult.success
+                        ? "border-success/30 bg-success/5"
+                        : "border-destructive/30 bg-destructive/5",
+                    )}>
+                      <div className="flex items-center gap-2 mb-3">
+                        {healthCheckResult.success
+                          ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                          : <AlertCircle className="h-4 w-4 text-destructive shrink-0" />}
+                        <p className="text-sm font-medium text-foreground">
+                          Sellsy health check — {healthCheckResult.success ? "all checks passed" : "issues detected"}
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        {Object.entries(healthCheckResult.checks).map(([key, check]) => (
+                          <div key={key} className="flex items-start gap-2 text-xs">
+                            <span className={cn("mt-0.5 shrink-0", check.ok ? "text-success" : "text-destructive")}>
+                              {check.ok ? "✓" : "✗"}
+                            </span>
+                            <span className="font-mono text-muted-foreground w-36 shrink-0">{key}</span>
+                            <span className="text-foreground flex-1">{check.detail}</span>
+                            {check.latency_ms != null && (
+                              <span className="tabular-nums text-muted-foreground shrink-0">{check.latency_ms}ms</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {syncRunError ? (
                     <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">

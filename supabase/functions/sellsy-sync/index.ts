@@ -924,6 +924,91 @@ async function handleOrderSync(user: AuthenticatedUser, accessToken: string, bod
   });
 }
 
+// ── Health check ──────────────────────────────────────────────────────────────
+// Verifies env vars, OAuth token acquisition, and a lightweight Sellsy probe
+// in a single round-trip. Returns a structured status object so callers can
+// surface connection problems without running a full sync.
+
+async function handleHealthCheck(user: AuthenticatedUser) {
+  const checks: Record<string, { ok: boolean; detail?: string; latency_ms?: number }> = {};
+
+  // 1. Env vars
+  const missingEnvVars = (
+    [
+      ["SELLSY_CLIENT_ID",     SELLSY_CLIENT_ID],
+      ["SELLSY_CLIENT_SECRET", SELLSY_CLIENT_SECRET],
+      ["SUPABASE_URL",         SUPABASE_URL],
+    ] as [string, string | undefined][]
+  )
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+
+  checks.env_vars = {
+    ok: missingEnvVars.length === 0,
+    detail: missingEnvVars.length === 0
+      ? "All required env vars are set"
+      : `Missing: ${missingEnvVars.join(", ")}`,
+  };
+
+  if (!checks.env_vars.ok) {
+    return jsonResponse({ success: false, mode: "health-check", checks, requestedBy: user.userId }, 503);
+  }
+
+  // 2. OAuth token
+  let accessToken: string | null = null;
+  {
+    const t0 = Date.now();
+    try {
+      accessToken = await getSellsyAccessToken();
+      checks.oauth_token = { ok: true, detail: "Token acquired successfully", latency_ms: Date.now() - t0 };
+    } catch (err) {
+      checks.oauth_token = {
+        ok: false,
+        detail: err instanceof Error ? err.message : String(err),
+        latency_ms: Date.now() - t0,
+      };
+      return jsonResponse({ success: false, mode: "health-check", checks, requestedBy: user.userId }, 503);
+    }
+  }
+
+  // 3. Lightweight API probe — fetch exactly 1 item to confirm connectivity + auth
+  {
+    const t0 = Date.now();
+    try {
+      const probe = await fetchSellsy("/v2/items?limit=1", accessToken, { method: "GET" });
+      const latency_ms = Date.now() - t0;
+      if (probe.response.ok) {
+        const items = extractSellsyCollection(probe.payload.data);
+        checks.api_probe = {
+          ok: true,
+          detail: `Sellsy reachable — ${items.length} item(s) in probe response`,
+          latency_ms,
+        };
+      } else {
+        checks.api_probe = {
+          ok: false,
+          detail: `HTTP ${probe.response.status}: ${probe.payload.text.slice(0, 200)}`,
+          latency_ms,
+        };
+      }
+    } catch (err) {
+      checks.api_probe = {
+        ok: false,
+        detail: err instanceof Error ? err.message : String(err),
+        latency_ms: Date.now() - t0,
+      };
+    }
+  }
+
+  const allOk = Object.values(checks).every((c) => c.ok);
+  return jsonResponse({
+    success: allOk,
+    mode: "health-check",
+    checks,
+    requestedBy: user.userId,
+  }, allOk ? 200 : 503);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -932,6 +1017,11 @@ Deno.serve(async (req) => {
   try {
     const user = await getAuthenticatedUser(req);
     const body = (await req.json().catch(() => ({}))) as JsonRecord;
+
+    if (body?.mode === "health-check") {
+      return await handleHealthCheck(user);
+    }
+
     const accessToken = await getSellsyAccessToken();
 
     if (body?.mode === "sync-products") {
