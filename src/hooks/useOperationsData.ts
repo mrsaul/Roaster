@@ -88,10 +88,16 @@ export function useRole() {
     queryKey: QUERY_KEYS.role,
     queryFn: async (): Promise<AppRole> => {
       const { data, error } = await supabase.rpc("ensure_current_user_role");
-      if (error) throw error;
+      // On error (e.g. wrong project, no session yet) — fall back to "user"
+      // instead of throwing, which would leave the dashboard blank.
+      if (error) {
+        console.warn("[useRole] RPC error, defaulting to 'user':", error.message);
+        return "user";
+      }
       return (data as AppRole) ?? "user";
     },
     staleTime: Infinity,
+    retry: 2,
   });
 }
 

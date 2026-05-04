@@ -120,9 +120,18 @@ export default function OperationsDashboard() {
 
   useEffect(() => {
     if (!role) return;
-    if (role === "roaster" && !params.get("section")) setParams({ section: "roasting" });
-    if (role === "packaging" && !params.get("section")) setParams({ section: "packaging" });
-  }, [role, params, setParams]);
+    // Default section by role when no section is set
+    if (!params.get("section")) {
+      if (role === "roaster") { setParams({ section: "roasting" }); return; }
+      if (role === "packaging") { setParams({ section: "packaging" }); return; }
+    }
+    // Guard: if the current section isn't accessible for this role,
+    // redirect to the first section this role CAN see — prevents blank render.
+    const allowed = NAV.filter((n) => n.roles.includes(role)).map((n) => n.id);
+    if (allowed.length > 0 && !allowed.includes(section as Section)) {
+      setParams({ section: allowed[0] });
+    }
+  }, [role, params, setParams, section]);
 
   const setSection = (s: Section) => setParams({ section: s });
 
