@@ -26,6 +26,7 @@ export type PackagingOrder = {
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
+  shopify_order_number?: string | null;
   items: { product_name: string; quantity: number; price_per_kg: number }[];
 };
 
@@ -157,6 +158,11 @@ export function PackagingView({ orders, onStatusChange, onChecklistChange }: Pac
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-foreground text-sm">{order.client_name ?? order.id.slice(0, 8)}</span>
+                      {order.shopify_order_number && (
+                        <Badge className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
+                          Shopify
+                        </Badge>
+                      )}
                       <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium", PRIORITY_CLASS[priority])}>
                         {PRIORITY_LABEL[priority]}
                       </span>

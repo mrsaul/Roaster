@@ -30,6 +30,7 @@ export interface RoasterOrder {
   total_kg: number;
   status: OrderStatus;
   is_roasted: boolean;
+  shopify_order_number?: string | null;
   items: RoasterOrderItem[];
 }
 
@@ -102,6 +103,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
         deliveryDate: string;
         status: OrderStatus;
         isRoasted: boolean;
+        shopifyOrderNumber: string | null;
       }[];
     }>();
 
@@ -115,6 +117,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
           deliveryDate: order.delivery_date,
           status: order.status,
           isRoasted: order.is_roasted,
+          shopifyOrderNumber: order.shopify_order_number ?? null,
         };
 
         if (existing) {
@@ -302,7 +305,14 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
                       {group.orders.map((o) => (
                         <div key={o.orderId} className="flex items-center gap-3 px-4 py-3">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{o.clientName}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-sm font-medium text-foreground truncate">{o.clientName}</p>
+                              {o.shopifyOrderNumber && (
+                                <Badge className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
+                                  Shopify
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
                               <span>{o.quantity} kg</span>
                               <span>·</span>

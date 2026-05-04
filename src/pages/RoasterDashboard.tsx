@@ -24,7 +24,8 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
         .from("orders")
         .select(`
           id, delivery_date, total_kg, status, is_roasted,
-          order_items ( product_id, product_name, quantity )
+          order_items ( product_id, product_name, quantity ),
+          shopify_orders ( shopify_order_number )
         `)
         .order("delivery_date", { ascending: true });
       if (error) throw error;
@@ -36,6 +37,7 @@ export default function RoasterDashboard({ onLogout }: RoasterDashboardProps) {
           total_kg: Number(o.total_kg),
           status: normalizeOrderStatus(o.status),
           is_roasted: Boolean(o.is_roasted),
+          shopify_order_number: o.shopify_orders?.[0]?.shopify_order_number ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             product_id: i.product_id,
             product_name: i.product_name,

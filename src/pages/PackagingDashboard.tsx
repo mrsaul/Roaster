@@ -21,7 +21,8 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
         .from("orders")
         .select(`
           id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
-          order_items ( product_name, quantity, price_per_kg )
+          order_items ( product_name, quantity, price_per_kg ),
+          shopify_orders ( shopify_order_number )
         `)
         .order("delivery_date", { ascending: true });
       if (error) throw error;
@@ -35,6 +36,7 @@ export default function PackagingDashboard({ onLogout }: PackagingDashboardProps
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
+          shopify_order_number: o.shopify_orders?.[0]?.shopify_order_number ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             product_name: i.product_name,
             quantity: Number(i.quantity),
