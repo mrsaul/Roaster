@@ -172,11 +172,11 @@ const Index = () => {
       return;
     }
     if (normalizedRole === "roaster") {
-      setView("roaster_dashboard");
+      window.location.replace("/operations?section=roasting");
       return;
     }
     if (normalizedRole === "packaging") {
-      setView("packaging_dashboard");
+      window.location.replace("/operations?section=packaging");
       return;
     }
 
