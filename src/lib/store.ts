@@ -45,7 +45,8 @@ export interface Order {
   totalPrice: number;
   deliveryDate: string;
   status: "pending" | "confirmed" | "fulfilled" | "synced" | "received" | "approved" | "in_production" | "ready_for_packaging" | "packaging" | "ready_for_delivery" | "shipped" | "delivered";
-  sellsyId?: string;
+  // HIDDEN — Sellsy — preserved for future use
+  // sellsyId?: string;
   createdAt: string;
 }
 
@@ -71,7 +72,8 @@ export const MOCK_ORDERS: Order[] = [
     totalPrice: 492.5,
     deliveryDate: "2026-03-20",
     status: "synced",
-    sellsyId: "SY-29481",
+    // HIDDEN — Sellsy — preserved for future use
+    // sellsyId: "SY-29481",
     createdAt: "2026-03-14",
   },
   {
@@ -83,7 +85,8 @@ export const MOCK_ORDERS: Order[] = [
     totalPrice: 360.0,
     deliveryDate: "2026-03-18",
     status: "fulfilled",
-    sellsyId: "SY-29455",
+    // HIDDEN — Sellsy — preserved for future use
+    // sellsyId: "SY-29455",
     createdAt: "2026-03-10",
   },
 ];

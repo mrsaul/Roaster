@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
+// HIDDEN — Sellsy — preserved for future use
+// import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
+type InvoicingStatus = "not_sent" | "sent" | "error";
+type InvoicingOrder = {
+  id: string; user_id: string; client_name: string | null; user_email: string | null;
+  delivery_date: string; total_kg: number; total_price: number; status: OrderStatus;
+  sellsy_id: string | null; invoicing_status: InvoicingStatus; last_invoice_sync: string | null;
+  has_sellsy_client_id: boolean;
+  items: { product_name: string; quantity: number; price_per_kg: number }[];
+};
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
 import { StockView } from "@/components/StockView";
 import {
-   LogOut, Users, Package, Coffee, BadgeEuro,
+   LogOut, Users, Package, Coffee,
+   // HIDDEN — Sellsy — preserved for future use
+   // BadgeEuro,
    RefreshCw, AlertCircle, CheckCircle2, Clock3,
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
@@ -105,13 +116,15 @@ type AdminOrder = {
   total_kg: number;
   total_price: number;
   status: OrderStatus;
-  sellsy_id: string | null;
+  // HIDDEN — Sellsy — preserved for future use
+  // sellsy_id: string | null;
   created_at: string;
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
-  invoicing_status: InvoicingStatus;
-  last_invoice_sync: string | null;
+  // HIDDEN — Sellsy — preserved for future use
+  // invoicing_status: InvoicingStatus;
+  // last_invoice_sync: string | null;
   items: AdminOrderItem[];
 };
 
@@ -130,8 +143,9 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 const ADMIN_SECTION_KEY = "pr_admin_section";
-type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "invoicing" | "team" | "profile" | "pricing" | "stock";
-const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "invoicing", "team", "profile", "pricing", "stock"];
+// HIDDEN — Sellsy — "invoicing" section preserved for future use
+type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "team" | "profile" | "pricing" | "stock";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "team", "profile", "pricing", "stock"];
 
 function loadAdminSection(): AdminSection {
   try {
@@ -149,7 +163,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try { sessionStorage.setItem(ADMIN_SECTION_KEY, section); } catch { /* ignore */ }
     setActiveSectionRaw(section);
   }, []);
-  const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
+  // HIDDEN — Sellsy — preserved for future use
+  // const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -170,21 +185,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<AppClient | null>(null);
-  const [runningClientSync, setRunningClientSync] = useState(false);
+  // HIDDEN — Sellsy — preserved for future use
+  // const [runningClientSync, setRunningClientSync] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
 
   // Products
   const [products, setProducts] = useState<AdminProductRow[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productError, setProductError] = useState<string | null>(null);
-  const [runningProductSync, setRunningProductSync] = useState(false);
-  const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
-  const [syncRunError, setSyncRunError] = useState<string | null>(null);
-  const [runningHealthCheck, setRunningHealthCheck] = useState(false);
-  const [healthCheckResult, setHealthCheckResult] = useState<{
-    success: boolean;
-    checks: Record<string, { ok: boolean; detail?: string; latency_ms?: number }>;
-  } | null>(null);
+  // HIDDEN — Sellsy — preserved for future use
+  // const [runningProductSync, setRunningProductSync] = useState(false);
+  // const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
+  // const [syncRunError, setSyncRunError] = useState<string | null>(null);
+  // const [runningHealthCheck, setRunningHealthCheck] = useState(false);
+  // const [healthCheckResult, setHealthCheckResult] = useState<{...} | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
 
   const { toast } = useToast();
@@ -196,8 +210,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, user_id, delivery_date, total_kg, total_price, status, sellsy_id, created_at,
-          is_roasted, is_packed, is_labeled, invoicing_status, last_invoice_sync,
+          id, user_id, delivery_date, total_kg, total_price, status, created_at,
+          is_roasted, is_packed, is_labeled,
+          /* HIDDEN — Sellsy — preserved for future use: sellsy_id, invoicing_status, last_invoice_sync */
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
@@ -221,13 +236,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
           status: normalizeOrderStatus(o.status),
-          sellsy_id: o.sellsy_id,
+          // HIDDEN — Sellsy — preserved for future use
+          // sellsy_id: o.sellsy_id,
           created_at: o.created_at,
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
-          invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
-          last_invoice_sync: o.last_invoice_sync ?? null,
+          // HIDDEN — Sellsy — preserved for future use
+          // invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
+          // last_invoice_sync: o.last_invoice_sync ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             id: i.id,
             product_id: i.product_id,
@@ -288,7 +305,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [toast]);
 
-  /* ── Shared helper: lookup client + invoke sellsy-sync create-order ── */
+  /* HIDDEN — Sellsy — preserved for future use
   const invokeSellsyCreateOrder = useCallback(async (order: AdminOrder) => {
     const { data: clientRow } = await supabase
       .from("client_onboarding")
@@ -314,40 +331,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       },
     });
   }, []);
+  */
 
-  /* ── Approve order (with Sellsy sync) ── */
+  /* ── Approve order ── */
   const approveOrder = useCallback(async (order: AdminOrder) => {
     setApprovingIds((prev) => new Set(prev).add(order.id));
     try {
       await changeOrderStatus(order.id, "approved");
-
-      const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
-
-      if (sellsyErr || !sellsyResult?.success) {
-        toast({
-          title: "Sellsy sync failed",
-          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
-          variant: "destructive",
-        });
-      } else {
-        const sellsyId = sellsyResult.sellsy_id ?? null;
-        const { error: updateErr } = await supabase
-          .from("orders")
-          .update({ sellsy_id: sellsyId })
-          .eq("id", order.id);
-        if (updateErr) {
-          toast({
-            title: "Sellsy ID save failed",
-            description: updateErr.message,
-            variant: "destructive",
-          });
-        } else {
-          setAdminOrders((prev) =>
-            prev.map((o) => o.id === order.id ? { ...o, sellsy_id: sellsyId } : o),
-          );
-        }
-      }
-
+      // HIDDEN — Sellsy — preserved for future use
+      // const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
+      // if (sellsyErr || !sellsyResult?.success) { ... }
       await loadOrders();
     } catch (err) {
       toast({ title: "Approve failed", description: String(err), variant: "destructive" });
@@ -358,7 +351,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return next;
       });
     }
-  }, [changeOrderStatus, invokeSellsyCreateOrder, loadOrders, toast]);
+  }, [changeOrderStatus, loadOrders, toast]);
 
   /* ── Bulk approve ── */
   const approveAllReceived = useCallback(async () => {
@@ -369,53 +362,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [adminOrders, approveOrder]);
 
-  /* ── Send invoice to Sellsy ── */
-  const sendInvoiceToSellsy = useCallback(async (orderId: string) => {
-    setInvoiceSendingIds((prev) => new Set(prev).add(orderId));
-    try {
-      const order = adminOrders.find((o) => o.id === orderId);
-      if (!order) throw new Error("Order not found");
-      if (order.invoicing_status === "sent") throw new Error("Already sent");
-
-      const { data: sellsyResult, error: sellsyErr } = await invokeSellsyCreateOrder(order);
-
-      if (sellsyErr || !sellsyResult?.success) {
-        await supabase.from("orders").update({
-          invoicing_status: "error",
-          last_invoice_sync: new Date().toISOString(),
-        }).eq("id", orderId);
-        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, invoicing_status: "error" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
-        toast({
-          title: "Invoice send failed",
-          description: sellsyResult?.error || sellsyErr?.message || "Unknown error",
-          variant: "destructive",
-        });
-      } else {
-        const sellsyId = sellsyResult.sellsy_id ?? null;
-        await supabase.from("orders").update({
-          sellsy_id: sellsyId,
-          invoicing_status: "sent",
-          last_invoice_sync: new Date().toISOString(),
-        }).eq("id", orderId);
-        setAdminOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, sellsy_id: sellsyId, invoicing_status: "sent" as InvoicingStatus, last_invoice_sync: new Date().toISOString() } : o));
-        toast({ title: "Invoice sent to Sellsy", description: `Invoice ID: ${sellsyId ?? "—"}` });
-      }
-    } catch (err) {
-      toast({ title: "Invoice send failed", description: String(err), variant: "destructive" });
-    } finally {
-      setInvoiceSendingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(orderId);
-        return next;
-      });
-    }
-  }, [adminOrders, invokeSellsyCreateOrder, toast]);
-
-  const bulkSendInvoices = useCallback(async (orderIds: string[]) => {
-    for (const id of orderIds) {
-      await sendInvoiceToSellsy(id);
-    }
-  }, [sendInvoiceToSellsy]);
+  /* HIDDEN — Sellsy — preserved for future use
+  const sendInvoiceToSellsy = useCallback(async (orderId: string) => { ... }, []);
+  const bulkSendInvoices = useCallback(async (orderIds: string[]) => { ... }, []);
+  */
 
   /* ── Order item editing (only for "received" orders) ── */
   const recalcOrderTotals = useCallback(async (orderId: string) => {
@@ -553,94 +503,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
-  const loadLatestProductSync = async () => {
-    setSyncRunError(null);
-    try {
-      const { data, error } = await supabase
-        .from("sync_runs")
-        .select("id, status, synced_count, parse_errors, completed_at, created_at")
-        .eq("source", "sellsy")
-        .eq("sync_type", "products")
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      setSyncRun((data as SyncRunRow | null) ?? null);
-    } catch (err) {
-      setSyncRunError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const runProductSync = async () => {
-    setRunningProductSync(true);
-    setProductError(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-        body: { mode: "sync-products" },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Sync failed");
-      await Promise.all([loadProducts(), loadLatestProductSync()]);
-      toast({ title: "Product sync completed", description: `${data.syncedCount ?? 0} products refreshed.` });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setProductError(msg);
-      toast({ title: "Product sync failed", description: msg, variant: "destructive" });
-    } finally {
-      setRunningProductSync(false);
-    }
-  };
-
-  const runClientSync = async () => {
-    setRunningClientSync(true);
-    setClientError(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-        body: { mode: "sync-all-clients" },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Sync failed");
-      await loadClients();
-      toast({ title: "Client sync completed", description: `${data.syncedCount ?? 0} clients synced from Sellsy.` });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setClientError(msg);
-      toast({ title: "Client sync failed", description: msg, variant: "destructive" });
-    } finally {
-      setRunningClientSync(false);
-    }
-  };
-
-  const runHealthCheck = async () => {
-    setRunningHealthCheck(true);
-    setHealthCheckResult(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-        body: { mode: "health-check" },
-      });
-      if (error) throw new Error(error.message);
-      setHealthCheckResult(data);
-      toast({
-        title: data?.success ? "Sellsy connection OK" : "Sellsy connection issue",
-        description: data?.success
-          ? "All checks passed — Sellsy API is reachable."
-          : "One or more checks failed. See details below.",
-        variant: data?.success ? "default" : "destructive",
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast({ title: "Health check failed", description: msg, variant: "destructive" });
-    } finally {
-      setRunningHealthCheck(false);
-    }
-  };
+  /* HIDDEN — Sellsy — preserved for future use
+  const loadLatestProductSync = async () => { ... };
+  const runProductSync = async () => { ... };
+  const runClientSync = async () => { ... };
+  const runHealthCheck = async () => { ... };
+  */
 
   /* ── Init + Realtime ── */
   useEffect(() => {
     void loadOrders();
     void loadClients();
     void loadProducts();
-    void loadLatestProductSync();
+    // HIDDEN — Sellsy — preserved for future use
+    // void loadLatestProductSync();
 
     // Subscribe to new orders in real-time
     const channel = supabase
@@ -715,8 +591,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     averagePrice: products.length > 0 ? products.reduce((s, p) => s + p.price_per_kg, 0) / products.length : 0,
   }), [products]);
 
-  const latestParseErrors = syncRun?.parse_errors ?? [];
-  const latestSyncTimestamp = syncRun?.completed_at ?? syncRun?.created_at ?? null;
+  // HIDDEN — Sellsy — preserved for future use
+  // const latestParseErrors = syncRun?.parse_errors ?? [];
+  // const latestSyncTimestamp = syncRun?.completed_at ?? syncRun?.created_at ?? null;
 
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) setSortAsc(!sortAsc);
@@ -727,7 +604,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     orders: "Orders",
     packaging: "Packaging",
     roaster: "Roaster",
-    invoicing: "Invoicing",
+    // HIDDEN — Sellsy — preserved for future use
+    // invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
     pricing: "Pricing",
@@ -738,7 +616,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   /* ── Sidebar nav items ── */
   const [menuOpen, setMenuOpen] = useState(false);
   const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
-  const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
+  // HIDDEN — Sellsy — preserved for future use
+  // const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
 
   const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
@@ -747,7 +626,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   ];
 
   const menuSubItems = [
-    { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
+    // HIDDEN — Sellsy — preserved for future use
+    // { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
@@ -789,28 +669,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     [adminOrders],
   );
 
-  /* ── Invoicing orders mapped ── */
+  /* HIDDEN — Sellsy — preserved for future use
   const invoicingOrders: InvoicingOrder[] = useMemo(() =>
     adminOrders.map((o) => {
       const client = clients.find((c) => c.user_id === o.user_id);
       return {
-        id: o.id,
-        user_id: o.user_id,
-        client_name: o.client_name,
-        user_email: o.user_email,
-        delivery_date: o.delivery_date,
-        total_kg: o.total_kg,
-        total_price: o.total_price,
-        status: o.status,
-        sellsy_id: o.sellsy_id,
-        invoicing_status: o.invoicing_status,
-        last_invoice_sync: o.last_invoice_sync,
-        has_sellsy_client_id: Boolean(client?.sellsy_client_id),
+        id: o.id, user_id: o.user_id, client_name: o.client_name, user_email: o.user_email,
+        delivery_date: o.delivery_date, total_kg: o.total_kg, total_price: o.total_price,
+        status: o.status, sellsy_id: o.sellsy_id, invoicing_status: o.invoicing_status,
+        last_invoice_sync: o.last_invoice_sync, has_sellsy_client_id: Boolean(client?.sellsy_client_id),
         items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
       };
-    }),
-    [adminOrders, clients],
+    }), [adminOrders, clients],
   );
+  */
 
   /* ── Packaging sheet export ── */
   const parsePackagingSheetId = (input: string): string | null => {
@@ -1111,9 +983,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     Approve
                                   </Button>
                                 )}
-                                {order.sellsy_id && (
+                                {/* HIDDEN — Sellsy — preserved for future use */}
+                                {/* {order.sellsy_id && (
                                   <span className="text-xs font-mono text-muted-foreground">{order.sellsy_id}</span>
-                                )}
+                                )} */}
                               </TableCell>
                             </TableRow>
                           ))
@@ -1202,15 +1075,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </div>
             )}
 
-            {/* ═══════════ INVOICING ═══════════ */}
-            {activeSection === "invoicing" && (
+            {/* HIDDEN — Sellsy — preserved for future use */}
+            {/* {activeSection === "invoicing" && (
               <InvoicingView
                 orders={invoicingOrders}
                 onSendToSellsy={sendInvoiceToSellsy}
                 onBulkSendToSellsy={bulkSendInvoices}
                 sendingIds={invoiceSendingIds}
               />
-            )}
+            )} */}
 
             {/* ═══════════ CLIENTS ═══════════ */}
             {activeSection === "clients" && (
@@ -1230,26 +1103,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
 
-                {/* Sellsy Client Sync */}
+                {/* HIDDEN — Sellsy — preserved for future use */}
+                {/* Sellsy Client Sync panel */}
                 <div className="mb-6 rounded-lg border border-border bg-card p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        <h2 className="text-sm font-medium text-foreground">Sellsy client sync</h2>
+                        <h2 className="text-sm font-medium text-foreground">Clients</h2>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Import or update client records from Sellsy.
-                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowAddClient(true)}>
                         <Plus className="h-4 w-4" /> Add New Client
                       </Button>
-                      <Button size="sm" className="gap-2 bg-amber-600 opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
+                      {/* HIDDEN — Sellsy — preserved for future use */}
+                      {/* <Button size="sm" className="gap-2 bg-amber-600 opacity-95" onClick={() => void runClientSync()} disabled={runningClientSync}>
                         <RefreshCw className={cn("h-4 w-4", runningClientSync && "animate-spin")} />
                         {runningClientSync ? "syncing clients…" : "Sync clients from Sellsy"}
-                      </Button>
+                      </Button> */}
                     </div>
                   </div>
                 </div>
@@ -1269,7 +1141,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <section>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="bg-card border border-border rounded-lg p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Sellsy products</p>
+                    <p className="text-xs text-muted-foreground mb-2">Products</p>
                     <p className="text-2xl font-medium tabular-nums text-foreground">{productSummary.totalProducts}</p>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-4">
@@ -1282,8 +1154,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
 
-                {/* Sync status */}
-                <div className="mb-8 rounded-lg border border-border bg-card p-4">
+                {/* HIDDEN — Sellsy — preserved for future use */}
+                {false && <div className="mb-8 rounded-lg border border-border bg-card p-4 hidden">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex items-center gap-2">
@@ -1404,6 +1276,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       No product sync run has been logged yet.
                     </div>
                   )}
+                </div>}
+
+                {/* Products toolbar */}
+                <div className="mb-4 flex gap-2">
+                  <Button size="sm" className="gap-2" onClick={() => setShowCreateProduct(true)}>
+                    <Plus className="w-4 h-4" /> Add Product
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => void loadProducts()}>
+                    <RefreshCw className="w-4 h-4" /> Refresh
+                  </Button>
                 </div>
 
                 {/* Products table */}
@@ -1456,7 +1338,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   )}
                                   <div>
                                     <p className="font-medium text-foreground">{displayName}</p>
-                                    <p className="text-xs text-muted-foreground">{product.sellsy_id}</p>
+                                    {/* HIDDEN — Sellsy — preserved for future use */}
+                                {/* <p className="text-xs text-muted-foreground">{product.sellsy_id}</p> */}
                                   </div>
                                 </div>
                               </TableCell>
@@ -1524,7 +1407,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           {selectedOrder && (() => {
             const isEditable = selectedOrder.status === "received";
             const canEdit = !["delivered"].includes(selectedOrder.status);
-            const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
+            // HIDDEN — Sellsy — preserved for future use
+            // const hasSellsyWarning = canEdit && !isEditable && selectedOrder.sellsy_id;
             return (
             <div className="space-y-5">
               {/* Info grid */}
@@ -1689,13 +1573,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               )}
 
-              {/* Sellsy warning */}
-              {hasSellsyWarning && (
+              {/* HIDDEN — Sellsy — preserved for future use */}
+              {/* {hasSellsyWarning && (
                 <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
                   <p className="text-sm font-medium text-foreground">⚠️ This order has been sent to Sellsy</p>
                   <p className="text-xs text-muted-foreground mt-1">Changes will not update the existing invoice.</p>
                 </div>
-              )}
+              )} */}
 
               {/* Totals */}
               <div className="flex items-center justify-between border-t border-border pt-3">
@@ -1714,7 +1598,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       setSelectedOrder(null);
                     }}
                   >
-                    <Check className="w-4 h-4" /> Approve & Send to Sellsy
+                    <Check className="w-4 h-4" /> Approve
                   </Button>
                 </div>
               )}

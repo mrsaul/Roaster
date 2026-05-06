@@ -34,7 +34,9 @@ export type AdminProduct = {
   tags: string[];
   tasting_notes: string | null;
   process: string | null;
-  data_source_mode: "sellsy" | "custom";
+  // HIDDEN — Sellsy — preserved for future use
+  // data_source_mode: "sellsy" | "custom";
+  data_source_mode: "custom"; // locked while Sellsy is hidden
   custom_name: string | null;
   custom_price_per_kg: number | null;
 };
@@ -47,7 +49,9 @@ type ProductFormData = {
   isActive: boolean;
   process: string;
   origin: string;
-  dataSourceMode: "sellsy" | "custom";
+  // HIDDEN — Sellsy — preserved for future use
+  // dataSourceMode: "sellsy" | "custom";
+  dataSourceMode: "custom"; // locked while Sellsy is hidden
   customName: string;
   customPrice: string;
 };
@@ -60,7 +64,9 @@ function productToForm(product: AdminProduct): ProductFormData {
     isActive: product.is_active,
     process: product.process ?? "",
     origin: product.origin ?? "",
-    dataSourceMode: product.data_source_mode ?? "sellsy",
+    // HIDDEN — Sellsy — preserved for future use
+    // dataSourceMode: product.data_source_mode ?? "sellsy",
+    dataSourceMode: "custom",
     customName: product.custom_name ?? "",
     customPrice: product.custom_price_per_kg?.toString() ?? "",
   };
@@ -68,7 +74,9 @@ function productToForm(product: AdminProduct): ProductFormData {
 
 const PRODUCT_FORM_DEFAULT: ProductFormData = {
   imageUrl: "", tags: [], tastingNotes: "", isActive: true,
-  process: "", origin: "", dataSourceMode: "sellsy", customName: "", customPrice: "",
+  // HIDDEN — Sellsy — preserved for future use
+  // dataSourceMode: "sellsy",
+  process: "", origin: "", dataSourceMode: "custom", customName: "", customPrice: "",
 };
 
 const SUGGESTED_TAGS = [
@@ -309,56 +317,10 @@ export function AdminProductDetail({ product, open, onOpenChange, onSaved }: Pro
               <DraftBanner savedAt={draftSavedAt} onDiscard={handleDiscard} />
             )}
 
-            {/* Data Source Mode */}
-            <div className="rounded-xl border-2 border-border p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Data Source</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("sellsy")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    isSellsyMode
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                    <p className="text-[11px] text-muted-foreground">Auto-synced data</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("custom")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    !isSellsyMode
-                      ? "border-accent-foreground bg-accent/50"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
-                    <p className="text-[11px] text-muted-foreground">App-only pricing</p>
-                  </div>
-                </button>
-              </div>
-
-              {isSellsyMode ? (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
-                  <Link2 className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs text-primary font-medium">Synced with Sellsy — name and price are read-only</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
-                  <p className="text-xs text-accent-foreground font-medium">Custom override active — invoices may differ from app pricing</p>
-                </div>
-              )}
-            </div>
+            {/* HIDDEN — Sellsy — preserved for future use */}
+            {/* <div className="rounded-xl border-2 border-border p-4 space-y-3">
+              Data Source Mode toggle (Sellsy / Custom) — hidden while Sellsy integration is disabled
+            </div> */}
 
             {/* Name & Price */}
             <div className="grid gap-3 sm:grid-cols-2">

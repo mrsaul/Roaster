@@ -348,6 +348,7 @@ export function StockView() {
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 <TableHead>Coffee reference</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead className="text-right">Stock (kg)</TableHead>
                 <TableHead className="text-right">Threshold (kg)</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -361,7 +362,7 @@ export function StockView() {
                 <StockTableSkeleton />
               ) : displayed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                     {search
                       ? `No results for "${search}"`
                       : filter === "low"
@@ -390,6 +391,19 @@ export function StockView() {
                           )}
                           {item.product_name}
                         </div>
+                      </TableCell>
+
+                      {/* Source badge */}
+                      <TableCell>
+                        {item.source === "shopify" ? (
+                          <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-600 bg-green-500/5">
+                            Shopify
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            Manual
+                          </Badge>
+                        )}
                       </TableCell>
 
                       {/* Stock qty */}

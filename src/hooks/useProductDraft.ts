@@ -7,7 +7,9 @@ export interface ProductDraftState {
   isActive: boolean;
   process: string;
   origin: string;
-  dataSourceMode: "sellsy" | "custom";
+  // HIDDEN — Sellsy — preserved for future use
+  // dataSourceMode: "sellsy" | "custom";
+  dataSourceMode: "custom"; // locked to custom while Sellsy is hidden
   customName: string;
   customPrice: string;
   savedAt: number;

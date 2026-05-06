@@ -1,3 +1,4 @@
+// HIDDEN — Sellsy sync disabled. Preserved for future use.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {

@@ -16,6 +16,7 @@ export type StockListItem = {
   product_name: string;
   updater_name: string | null;
   is_low: boolean;
+  source: string;                // "shopify" | "manual"
 };
 
 export type StockHistoryRow = {
@@ -44,7 +45,7 @@ export async function getStockList(): Promise<StockListItem[]> {
   const { data, error } = await db
     .from("products")
     .select(`
-      id, name, custom_name, data_source_mode,
+      id, name, custom_name, data_source_mode, source,
       roasted_stock (
         id, quantity_kg, low_stock_threshold_kg,
         last_updated_by, last_updated_at, created_at,
@@ -84,6 +85,7 @@ export async function getStockList(): Promise<StockListItem[]> {
       product_name: productName,
       updater_name: rs?.profiles?.full_name ?? null,
       is_low: isLow,
+      source: row.source ?? "manual",
     };
   });
 

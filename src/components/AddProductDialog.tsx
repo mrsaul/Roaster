@@ -43,8 +43,10 @@ type ProductFormData = {
   description: string;
   pricePerKg: string;
   roastLevel: string;
-  dataSourceMode: "custom" | "sellsy";
-  sellsyId: string;
+  // HIDDEN — Sellsy — preserved for future use
+  // dataSourceMode: "custom" | "sellsy";
+  dataSourceMode: "custom"; // locked while Sellsy is hidden
+  // sellsyId: string;
   imageUrl: string;
   tags: string[];
   variants: SizeVariant[];
@@ -59,7 +61,8 @@ const PRODUCT_FORM_DEFAULT: ProductFormData = {
   pricePerKg: "",
   roastLevel: "",
   dataSourceMode: "custom",
-  sellsyId: "",
+  // HIDDEN — Sellsy — preserved for future use
+  // sellsyId: "",
   imageUrl: "",
   tags: [],
   variants: [],
@@ -94,15 +97,18 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
   // Destructure for JSX readability
   const { name, origin, process, description, pricePerKg, roastLevel,
-    dataSourceMode, sellsyId, imageUrl, tags, variants, isActive } = form;
+    dataSourceMode, imageUrl, tags, variants, isActive } = form;
+  // HIDDEN — Sellsy — preserved for future use
+  // const sellsyId = form.sellsyId;
 
   // Field-specific setters — same call signature as the original useState setters
   const setName = (v: string) => setForm(p => ({ ...p, name: v }));
   const setOrigin = (v: string) => setForm(p => ({ ...p, origin: v }));
   const setDescription = (v: string) => setForm(p => ({ ...p, description: v }));
   const setPricePerKg = (v: string) => setForm(p => ({ ...p, pricePerKg: v }));
-  const setSellsyId = (v: string) => setForm(p => ({ ...p, sellsyId: v }));
-  const setDataSourceMode = (v: "custom" | "sellsy") => setForm(p => ({ ...p, dataSourceMode: v }));
+  // HIDDEN — Sellsy — preserved for future use
+  // const setSellsyId = (v: string) => setForm(p => ({ ...p, sellsyId: v }));
+  // const setDataSourceMode = (v: "custom" | "sellsy") => setForm(p => ({ ...p, dataSourceMode: v }));
   const setIsActive = (v: boolean) => setForm(p => ({ ...p, isActive: v }));
   const setImageUrl = (v: string) => setForm(p => ({ ...p, imageUrl: v }));
 
@@ -188,9 +194,11 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
 
     setSaving(true);
     try {
-      const effectiveSellsyId = dataSourceMode === "sellsy" && sellsyId.trim()
-        ? sellsyId.trim()
-        : `app-${tempProductId.slice(0, 8)}`;
+      // HIDDEN — Sellsy — preserved for future use
+      // const effectiveSellsyId = dataSourceMode === "sellsy" && sellsyId.trim()
+      //   ? sellsyId.trim()
+      //   : `app-${tempProductId.slice(0, 8)}`;
+      const effectiveSellsyId = `app-${tempProductId.slice(0, 8)}`;
 
       const { data: product, error } = await supabase.from("products").insert({
         id: tempProductId,
@@ -251,46 +259,17 @@ export function AddProductDialog({ open, onOpenChange, onCreated }: Props) {
             <DraftBanner savedAt={draftSavedAt} onDiscard={reset} />
           )}
 
-          {/* Data Source Mode */}
-          <div className="rounded-xl border-2 border-border p-4 space-y-3">
+          {/* HIDDEN — Sellsy — preserved for future use */}
+          {/* <div className="rounded-xl border-2 border-border p-4 space-y-3">
             <p className="text-sm font-medium text-foreground">Data Source</p>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setDataSourceMode("sellsy")}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                  dataSourceMode === "sellsy" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <Link2 className={cn("h-4 w-4 shrink-0", dataSourceMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
-                <div>
-                  <p className={cn("text-sm font-medium", dataSourceMode === "sellsy" ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                  <p className="text-[11px] text-muted-foreground">Linked to Sellsy</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDataSourceMode("custom")}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                  dataSourceMode === "custom" ? "border-accent-foreground bg-accent/50" : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <Unlink2 className={cn("h-4 w-4 shrink-0", dataSourceMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
-                <div>
-                  <p className={cn("text-sm font-medium", dataSourceMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App Only</p>
-                  <p className="text-[11px] text-muted-foreground">Managed locally</p>
-                </div>
-              </button>
+              <button type="button" onClick={() => setDataSourceMode("sellsy")} ...>Sync with Sellsy</button>
+              <button type="button" onClick={() => setDataSourceMode("custom")} ...>App Only</button>
             </div>
             {dataSourceMode === "sellsy" && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Product ID</p>
-                <Input value={sellsyId} onChange={(e) => setSellsyId(e.target.value)} placeholder="e.g. 12345" />
-              </div>
+              <Input value={sellsyId} onChange={(e) => setSellsyId(e.target.value)} placeholder="e.g. 12345" />
             )}
-          </div>
+          </div> */}
 
           {/* Basic Info */}
           <div className="grid gap-3 sm:grid-cols-2">
