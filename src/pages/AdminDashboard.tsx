@@ -116,7 +116,7 @@ type HealthCheckResult = {
 
 type AdminOrderItem = {
   id: string;
-  product_id: string;
+  product_id: string | null;   // null for unmatched Shopify line items
   product_name: string;
   product_sku: string | null;
   quantity: number;
@@ -125,9 +125,9 @@ type AdminOrderItem = {
 
 type AdminOrder = {
   id: string;
-  user_id: string;
+  user_id: string | null;      // null for Shopify-originated orders
   user_email: string | null;
-  client_name: string | null;
+  client_name: string | null;  // from orders.client_name (Shopify) or profiles (internal)
   delivery_date: string;
   total_kg: number;
   total_price: number;
@@ -229,7 +229,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, user_id, delivery_date, total_kg, total_price, status, created_at,
+          id, user_id, client_name, delivery_date, total_kg, total_price, status, created_at,
           is_roasted, is_packed, is_labeled,
           /* HIDDEN — Sellsy — preserved for future use: sellsy_id, invoicing_status, last_invoice_sync */
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
@@ -238,19 +238,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       if (error) throw error;
 
-      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id))];
+      // Only fetch profiles for orders with a real user_id (internal orders)
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
       const { data: profiles } = userIds.length > 0
         ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
         : { data: [] };
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
 
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
-        const profile = profileMap.get(o.user_id);
+        const profile = o.user_id ? profileMap.get(o.user_id) : null;
+        // Shopify orders have client_name on the order row; internal orders use profiles
+        const resolvedClientName =
+          o.client_name ||
+          profile?.full_name ||
+          profile?.email ||
+          null;
         return {
           id: o.id,
           user_id: o.user_id,
           user_email: profile?.email ?? null,
-          client_name: profile?.full_name || profile?.email || null,
+          client_name: resolvedClientName,
           delivery_date: o.delivery_date,
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),

@@ -71,6 +71,7 @@ type ShopifyLineItem = {
   grams: number;
   price: string;
   variant_title: string | null;
+  // Shopify may also send price_set, total_discount etc — we ignore those
 };
 
 type ShopifyOrder = {
@@ -187,22 +188,28 @@ Deno.serve(async (req) => {
   const shopifyRowId: string = shopifyRow.id;
   console.log(`[shopify-webhook] shopify_orders row created id=${shopifyRowId}`);
 
-  // 5. MATCH PRODUCTS
-  type MatchedItem = {
-    productId: string;
+  // 5. MATCH PRODUCTS — always save every line item; match internal product if possible
+  type MappedItem = {
+    productId: string | null;  // null = no internal match, still saved with Shopify title
     productName: string;
+    productSku: string | null;
     quantityKg: number;
-    unitPrice: number;
-    variantTitle: string;
+    pricePerKg: number;
+    variantTitle: string | null;
+    sizeKg: number | null;
   };
 
-  const matchedItems: MatchedItem[] = [];
+  const mappedItems: MappedItem[] = [];
 
   for (const item of lineItems) {
-    const quantityKg =
-      item.grams && item.grams > 0
-        ? (item.grams / 1000) * item.quantity
-        : item.quantity;
+    const grams = Number(item.grams) || 0;
+    const quantityKg = grams > 0
+      ? Math.round((grams / 1000) * item.quantity * 1000) / 1000
+      : item.quantity;
+    const itemPrice = parseFloat(item.price) || 0;
+    const pricePerKg = quantityKg > 0
+      ? Math.round((itemPrice / quantityKg) * 100) / 100
+      : itemPrice;
 
     console.log(`[shopify-webhook] Matching line_item sku=${item.sku} title="${item.title}"`);
 
@@ -235,41 +242,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // c. No match — skip with warning
     if (!product) {
       console.warn(
-        `[shopify-webhook] No product match for sku=${item.sku} title="${item.title}" — skipping line item`,
+        `[shopify-webhook] No internal product match for sku=${item.sku} title="${item.title}" — saving with product_id=null`,
       );
-      continue;
     }
 
-    const unitPrice = parseFloat(item.price) || 0;
-    const pricePerKg = quantityKg > 0
-      ? Math.round((unitPrice / quantityKg) * 100) / 100
-      : 0;
-
-    matchedItems.push({
-      productId: product.id,
-      productName: product.name,
+    // Always push — product_id is nullable, no match still records the item
+    mappedItems.push({
+      productId: product?.id ?? null,
+      productName: product?.name ?? item.title,
+      productSku: item.sku || null,
       quantityKg,
-      unitPrice: pricePerKg,
-      variantTitle: item.variant_title ?? "",
+      pricePerKg,
+      variantTitle: item.variant_title ?? null,
+      sizeKg: grams > 0 ? quantityKg : null,
     });
   }
 
-  const totalKg = matchedItems.reduce((sum, i) => sum + i.quantityKg, 0);
-  console.log(`[shopify-webhook] Matched ${matchedItems.length}/${lineItems.length} line items, total_kg=${totalKg}`);
+  const totalKg = mappedItems.reduce((sum, i) => sum + i.quantityKg, 0);
+  const matchedCount = mappedItems.filter((i) => i.productId !== null).length;
+  console.log(`[shopify-webhook] ${matchedCount}/${lineItems.length} items matched internally, total_kg=${totalKg}`);
 
-  // 6. CREATE internal order
+  // 6. CREATE internal order (with client_name from Shopify customer)
   console.log("[shopify-webhook] Inserting internal order");
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
       user_id: null,
+      client_name: customerName,         // visible in admin dashboard without a profile
       status: "received",
       total_kg: totalKg,
       total_price: totalPrice,
-      notes: `Shopify order #${orderNumber}`,
+      notes: `Shopify order #${orderNumber}${customerEmail ? ` · ${customerEmail}` : ""}`,
       confirmed_at: new Date().toISOString(),
       // delivery_date has no Shopify equivalent — set to today as a placeholder
       delivery_date: new Date().toISOString().split("T")[0],
@@ -284,16 +289,17 @@ Deno.serve(async (req) => {
   const orderId: string = order.id;
   console.log(`[shopify-webhook] Internal order created order_id=${orderId}`);
 
-  // Insert order_items
-  if (matchedItems.length > 0) {
-    const orderItemsPayload = matchedItems.map((item) => ({
+  // Insert ALL line items (product_id is nullable for unmatched items)
+  if (mappedItems.length > 0) {
+    const orderItemsPayload = mappedItems.map((item) => ({
       order_id: orderId,
-      product_id: item.productId,
+      product_id: item.productId,        // null for unmatched Shopify items
       product_name: item.productName,
+      product_sku: item.productSku,
       quantity: item.quantityKg,
-      price_per_kg: item.unitPrice,
+      price_per_kg: item.pricePerKg,
       size_label: item.variantTitle,
-      size_kg: item.quantityKg,
+      size_kg: item.sizeKg,
     }));
 
     console.log(`[shopify-webhook] Inserting ${orderItemsPayload.length} order_items`);
