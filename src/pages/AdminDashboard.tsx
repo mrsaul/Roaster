@@ -231,7 +231,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         .select(`
           id, user_id, client_name, delivery_date, total_kg, total_price, status, created_at,
           is_roasted, is_packed, is_labeled,
-          /* HIDDEN — Sellsy — preserved for future use: sellsy_id, invoicing_status, last_invoice_sync */
           order_items ( id, product_id, product_name, product_sku, quantity, price_per_kg )
         `)
         .order("created_at", { ascending: false });
@@ -621,7 +620,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           o.id.toLowerCase().includes(q) ||
           (o.client_name ?? "").toLowerCase().includes(q) ||
           (o.user_email ?? "").toLowerCase().includes(q) ||
-          o.items.some((i) => i.product_name.toLowerCase().includes(q)),
+          o.items.some((i) => (i.product_name ?? "").toLowerCase().includes(q)),
       );
     }
     result = [...result].sort((a, b) => {

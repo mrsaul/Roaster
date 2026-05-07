@@ -217,7 +217,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   const getClientLabel = (c: SimpleClient) => {
     const name = c.client_data_mode === "custom" && c.custom_company_name
       ? c.custom_company_name : c.company_name;
-    return name || c.email || c.user_id.slice(0, 8);
+    return name || c.email || (c.user_id ?? "").slice(0, 8) || "Unknown";
   };
 
   const getProductLabel = (p: SimpleProduct) =>

@@ -109,6 +109,7 @@ export function RoasterView({ orders, onMarkRoasted }: RoasterViewProps) {
 
     for (const order of relevantOrders) {
       for (const item of order.items) {
+        if (!item.product_id) continue; // skip unmatched Shopify line items
         const existing = map.get(item.product_id);
         const orderEntry = {
           orderId: order.id,
