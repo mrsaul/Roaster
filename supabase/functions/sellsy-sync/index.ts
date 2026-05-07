@@ -128,16 +128,16 @@ function createServiceSupabaseClient() {
 
 async function getAuthenticatedUser(req: Request): Promise<AuthenticatedUser> {
   const authHeader = getRequestBearerToken(req);
-  const token = authHeader.replace("Bearer ", "");
   const supabase = createUserScopedSupabaseClient(authHeader);
 
-  const { data, error } = await supabase.auth.getClaims(token);
+  // Use standard getUser() — getClaims() is non-standard and may not exist
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (error || !data?.claims?.sub) {
+  if (error || !user?.id) {
     throw errorResponse(401, "Unauthorized");
   }
 
-  const userId = data.claims.sub;
+  const userId = user.id;
   const { data: roleRows, error: roleError } = await supabase
     .from("user_roles")
     .select("role")
@@ -155,7 +155,7 @@ async function getAuthenticatedUser(req: Request): Promise<AuthenticatedUser> {
 
   return {
     userId,
-    email: typeof data.claims.email === "string" ? data.claims.email : null,
+    email: user.email ?? null,
   };
 }
 

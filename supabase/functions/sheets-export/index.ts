@@ -48,13 +48,13 @@ async function requireAdmin(req: Request): Promise<string> {
     throw jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  const token = authHeader.replace("Bearer ", "");
   const supabase = createUserScopedSupabaseClient(authHeader);
-  const { data, error } = await supabase.auth.getClaims(token);
+  // Use standard getUser() — getClaims() is non-standard and may not exist
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (error || !data?.claims?.sub) throw jsonResponse({ error: "Unauthorized" }, 401);
+  if (error || !user?.id) throw jsonResponse({ error: "Unauthorized" }, 401);
 
-  const userId = data.claims.sub;
+  const userId = user.id;
   const { data: roleRows, error: roleError } = await supabase
     .from("user_roles")
     .select("role")

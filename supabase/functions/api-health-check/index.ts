@@ -91,20 +91,20 @@ async function getAuthenticatedAdmin(req: Request): Promise<string> {
     });
   }
 
-  const token = authHeader.replace("Bearer ", "");
   const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims?.sub) {
+  // Use standard getUser() — getClaims() is non-standard and may not exist
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.id) {
     throw new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  const userId = data.claims.sub as string;
+  const userId = user.id;
   const { data: roles } = await supabase
     .from("user_roles")
     .select("role")

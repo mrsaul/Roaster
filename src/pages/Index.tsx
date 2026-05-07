@@ -298,41 +298,17 @@ const Index = () => {
   }, [cart]);
 
   const handleConfirmOrder = useCallback(async (deliveryDate: string, notes?: string): Promise<{ orderId: string }> => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       throw new Error("Not authenticated");
     }
 
-    const payload = {
-      user_id: user.id,
-      delivery_date: deliveryDate,
-      total_kg: cart.totalKg,
-      total_price: cart.totalPrice,
-      status: "received" as const,
-      confirmed_at: new Date().toISOString(),
-      notes: notes ?? null,
-    };
-
-    const { data: createdOrder, error: orderError } = await supabase
-      .from("orders")
-      .insert(payload)
-      .select("id, delivery_date, total_kg, total_price, status, sellsy_id, created_at")
-      .single();
-
-    if (orderError || !createdOrder) {
-      const msg = orderError?.message ?? "Failed to create order";
-      toast({ title: "Order failed", description: msg, variant: "destructive" });
-      throw orderError ?? new Error(msg);
-    }
-
-    const itemRows = cart.items.map((item) => ({
-      order_id: createdOrder.id,
+    // Build items array for the atomic RPC — single DB transaction, no orphaned orders
+    const items = cart.items.map((item) => ({
       product_id: item.product.id,
       product_name: item.product.name,
-      product_sku: item.product.sku,
+      product_sku: item.product.sku ?? null,
       price_per_kg: item.unitPrice != null && item.sizeKg
         ? item.unitPrice / item.sizeKg
         : item.product.pricePerKg,
@@ -341,13 +317,24 @@ const Index = () => {
       size_kg: item.sizeKg ?? null,
     }));
 
-    if (itemRows.length > 0) {
-      const { error: itemsError } = await supabase.from("order_items").insert(itemRows);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      "create_order_with_items",
+      {
+        p_user_id:       user.id,
+        p_delivery_date: deliveryDate,
+        p_total_kg:      cart.totalKg,
+        p_total_price:   cart.totalPrice,
+        p_status:        "received",
+        p_confirmed_at:  new Date().toISOString(),
+        p_notes:         notes ?? null,
+        p_items:         items,
+      },
+    );
 
-      if (itemsError) {
-        toast({ title: "Order items failed", description: itemsError.message, variant: "destructive" });
-        throw itemsError;
-      }
+    if (rpcError || !rpcResult?.order_id) {
+      const msg = rpcError?.message ?? "Failed to create order";
+      toast({ title: "Order failed", description: msg, variant: "destructive" });
+      throw rpcError ?? new Error(msg);
     }
 
     // Refresh orders in background; CheckoutPage shows success screen, not Index
@@ -355,7 +342,7 @@ const Index = () => {
     setDraftDeliveryDate(null);
     cart.clearCart();
 
-    return { orderId: createdOrder.id };
+    return { orderId: rpcResult.order_id as string };
   }, [cart, loadOrders, toast]);
 
   const handlePlaceDraftOrder = useCallback(() => {
