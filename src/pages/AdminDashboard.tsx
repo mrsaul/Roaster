@@ -13,9 +13,7 @@ import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
 import { StockView } from "@/components/StockView";
 import {
-   LogOut, Users, Package, Coffee,
-   // HIDDEN — Sellsy — preserved for future use
-   // BadgeEuro,
+   LogOut, Users, Package, Coffee, BadgeEuro,
    RefreshCw, AlertCircle, CheckCircle2, Clock3,
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
