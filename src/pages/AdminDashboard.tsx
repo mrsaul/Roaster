@@ -20,6 +20,7 @@ import {
    Calendar, Search, X, Check, Send, RotateCcw, Bike,
    Plus, Minus, Trash2, Flame, FileText, Shield,
    Menu, User, Settings, Warehouse, ExternalLink,
+   Activity, Wifi, WifiOff, Loader2,
 } from "lucide-react";
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -98,6 +99,21 @@ type SyncRunRow = {
   created_at: string;
 };
 
+type HealthCheckStatus = "ok" | "degraded" | "down";
+type HealthCheckResult = {
+  timestamp: string;
+  overall: "healthy" | "degraded" | "down";
+  integrations: Record<string, {
+    overall: HealthCheckStatus;
+    checks: Record<string, {
+      status: HealthCheckStatus;
+      latency_ms?: number;
+      detail?: string;
+      error?: string;
+    }>;
+  }>;
+};
+
 type AdminOrderItem = {
   id: string;
   product_id: string;
@@ -144,8 +160,8 @@ function formatDate(value: string | null) {
 
 const ADMIN_SECTION_KEY = "pr_admin_section";
 // HIDDEN — Sellsy — "invoicing" section preserved for future use
-type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "team" | "profile" | "pricing" | "stock";
-const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "team", "profile", "pricing", "stock"];
+type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "team" | "profile" | "pricing" | "stock" | "health";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "team", "profile", "pricing", "stock", "health"];
 
 function loadAdminSection(): AdminSection {
   try {
@@ -197,9 +213,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // const [runningProductSync, setRunningProductSync] = useState(false);
   // const [syncRun, setSyncRun] = useState<SyncRunRow | null>(null);
   // const [syncRunError, setSyncRunError] = useState<string | null>(null);
-  // const [runningHealthCheck, setRunningHealthCheck] = useState(false);
-  // const [healthCheckResult, setHealthCheckResult] = useState<{...} | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
+
+  // ── System Health ──
+  const [runningHealthCheck, setRunningHealthCheck] = useState(false);
+  const [healthCheckResult, setHealthCheckResult] = useState<HealthCheckResult | null>(null);
+  const [healthCheckError, setHealthCheckError] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -507,8 +526,39 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const loadLatestProductSync = async () => { ... };
   const runProductSync = async () => { ... };
   const runClientSync = async () => { ... };
-  const runHealthCheck = async () => { ... };
   */
+
+  /* ── System Health Check ── */
+  const runFullHealthCheck = useCallback(async () => {
+    setRunningHealthCheck(true);
+    setHealthCheckError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("api-health-check", {});
+      if (error) {
+        let detail = error.message;
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) detail = body.error;
+        } catch { /* ignore */ }
+        throw new Error(detail);
+      }
+      setHealthCheckResult(data as HealthCheckResult);
+      const overall = (data as HealthCheckResult).overall;
+      if (overall === "healthy") {
+        toast({ title: "All systems healthy ✓" });
+      } else if (overall === "degraded") {
+        toast({ title: "Some systems degraded", description: "Check the health panel for details.", variant: "destructive" });
+      } else {
+        toast({ title: "Systems down", description: "Critical issues detected.", variant: "destructive" });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setHealthCheckError(msg);
+      toast({ title: "Health check failed", description: msg, variant: "destructive" });
+    } finally {
+      setRunningHealthCheck(false);
+    }
+  }, [toast]);
 
   /* ── Init + Realtime ── */
   useEffect(() => {
@@ -609,8 +659,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     clients: "Clients",
     products: "Products",
     pricing: "Pricing",
+    stock: "Stock",
     team: "Team",
     profile: "Profile Settings",
+    health: "System Health",
   };
 
   /* ── Sidebar nav items ── */
@@ -634,6 +686,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { key: "stock" as const, icon: Warehouse, label: "Stock", badge: null },
     { key: "team" as const, icon: Shield, label: "Team", badge: null },
     { key: "profile" as const, icon: Settings, label: "Profile Settings", badge: null },
+    { key: "health" as const, icon: Activity, label: "System Health", badge: null },
   ];
 
   const menuSectionActive = menuSubItems.some((item) => activeSection === item.key);
@@ -1371,6 +1424,172 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     </Table>
                   </div>
                 </div>
+              </section>
+            )}
+
+            {/* ═══════════ SYSTEM HEALTH ═══════════ */}
+            {activeSection === "health" && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">System Health</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Live status of all external integrations</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => void runFullHealthCheck()}
+                    disabled={runningHealthCheck}
+                  >
+                    {runningHealthCheck
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Running…</>
+                      : <><Activity className="w-4 h-4" /> Run Health Check</>}
+                  </Button>
+                </div>
+
+                {/* Overall status banner */}
+                {healthCheckResult && (
+                  <div className={cn(
+                    "rounded-xl border px-5 py-4 flex items-center gap-3",
+                    healthCheckResult.overall === "healthy" && "border-green-500/30 bg-green-50 dark:bg-green-950/20",
+                    healthCheckResult.overall === "degraded" && "border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20",
+                    healthCheckResult.overall === "down" && "border-red-500/30 bg-red-50 dark:bg-red-950/20",
+                  )}>
+                    {healthCheckResult.overall === "healthy" && <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />}
+                    {healthCheckResult.overall === "degraded" && <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0" />}
+                    {healthCheckResult.overall === "down" && <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />}
+                    <div>
+                      <p className={cn(
+                        "text-sm font-semibold",
+                        healthCheckResult.overall === "healthy" && "text-green-700 dark:text-green-400",
+                        healthCheckResult.overall === "degraded" && "text-yellow-700 dark:text-yellow-400",
+                        healthCheckResult.overall === "down" && "text-red-700 dark:text-red-400",
+                      )}>
+                        {healthCheckResult.overall === "healthy" && "All systems operational"}
+                        {healthCheckResult.overall === "degraded" && "Some systems degraded"}
+                        {healthCheckResult.overall === "down" && "Critical systems down"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Last checked: {new Date(healthCheckResult.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {healthCheckError && !healthCheckResult && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-50 dark:bg-red-950/20 px-5 py-4 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Health check failed</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{healthCheckError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Integration cards */}
+                {!healthCheckResult && !runningHealthCheck && (
+                  <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+                    <Activity className="w-8 h-8 mx-auto text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">Run a health check to see the status of all integrations.</p>
+                  </div>
+                )}
+
+                {runningHealthCheck && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {["Sellsy", "Shopify", "Google Sheets", "Supabase"].map((name) => (
+                      <div key={name} className="rounded-xl border border-border bg-card p-5 animate-pulse">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-3 h-3 rounded-full bg-muted" />
+                          <div className="h-4 w-24 bg-muted rounded" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-3 w-full bg-muted rounded" />
+                          <div className="h-3 w-3/4 bg-muted rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {healthCheckResult && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {Object.entries(healthCheckResult.integrations).map(([integrationKey, integration]) => {
+                      const statusColor = {
+                        ok: "bg-green-500",
+                        degraded: "bg-yellow-500",
+                        down: "bg-red-500",
+                      }[integration.overall] ?? "bg-gray-400";
+
+                      const statusLabel = {
+                        ok: "Operational",
+                        degraded: "Degraded",
+                        down: "Down",
+                      }[integration.overall] ?? integration.overall;
+
+                      const integrationName = {
+                        sellsy: "Sellsy",
+                        shopify: "Shopify",
+                        google_sheets: "Google Sheets",
+                        supabase: "Supabase",
+                      }[integrationKey] ?? integrationKey;
+
+                      return (
+                        <div key={integrationKey} className={cn(
+                          "rounded-xl border bg-card p-5",
+                          integration.overall === "ok" && "border-green-500/20",
+                          integration.overall === "degraded" && "border-yellow-500/20",
+                          integration.overall === "down" && "border-red-500/30",
+                        )}>
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
+                              <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", statusColor)} />
+                              <span className="text-sm font-semibold text-foreground">{integrationName}</span>
+                            </div>
+                            <span className={cn(
+                              "text-xs font-medium px-2 py-0.5 rounded-full",
+                              integration.overall === "ok" && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                              integration.overall === "degraded" && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+                              integration.overall === "down" && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                            )}>
+                              {statusLabel}
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {Object.entries(integration.checks).map(([checkKey, check]) => (
+                              <div key={checkKey} className="flex items-start gap-2 text-xs">
+                                <span className={cn(
+                                  "mt-0.5 text-base leading-none shrink-0",
+                                  check.status === "ok" && "text-green-500",
+                                  check.status === "degraded" && "text-yellow-500",
+                                  check.status === "down" && "text-red-500",
+                                )}>
+                                  {check.status === "ok" ? "✓" : "✗"}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-mono text-muted-foreground">{checkKey.replace(/_/g, " ")}</span>
+                                  {(check.detail || check.error) && (
+                                    <p className={cn(
+                                      "mt-0.5 truncate",
+                                      check.error ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
+                                    )}>
+                                      {check.error ?? check.detail}
+                                    </p>
+                                  )}
+                                </div>
+                                {check.latency_ms != null && (
+                                  <span className="tabular-nums text-muted-foreground shrink-0 ml-1">
+                                    {check.latency_ms}ms
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             )}
 
