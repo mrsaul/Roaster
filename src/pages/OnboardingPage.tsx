@@ -163,6 +163,7 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
         _siret:                   data.siret || null,
         _email:                   data.email || user.email || null,
         _phone:                   data.phone || null,
+        _contact_name:            data.contact_name || null,
         _delivery_address:        data.delivery_address || null,
         _delivery_instructions:   data.delivery_instructions || null,
         _preferred_delivery_days: data.preferred_delivery_days,

@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION public.user_save_onboarding_progress(
   _siret                    text        DEFAULT NULL,
   _email                    text        DEFAULT NULL,
   _phone                    text        DEFAULT NULL,
+  _contact_name             text        DEFAULT NULL,
   _delivery_address         text        DEFAULT NULL,
   _delivery_instructions    text        DEFAULT NULL,
   _preferred_delivery_days  text[]      DEFAULT NULL,
@@ -113,8 +114,15 @@ BEGIN
     END IF;
 
     -- Create primary contact linked to this auth user
-    INSERT INTO public.contacts (company_id, user_id, email, phone, is_primary)
-    VALUES (_company_id, _uid, _email, _phone, true)
+    INSERT INTO public.contacts (company_id, user_id, last_name, email, phone, is_primary)
+    VALUES (
+      _company_id,
+      _uid,
+      COALESCE(_contact_name, _company_name, _email, 'Contact'),
+      _email,
+      _phone,
+      true
+    )
     RETURNING id INTO _contact_id;
   END IF;
 
