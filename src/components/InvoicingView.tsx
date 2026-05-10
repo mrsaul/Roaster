@@ -296,7 +296,7 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // UI state
-  const [previewOrder, setPreviewOrder] = useState<InvoicingOrder | null>(null);
+  const [previewOrderId, setPreviewOrderId] = useState<string | null>(null);
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
@@ -414,15 +414,18 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
         return { success: false, error: msg };
       }
 
-      setOrders((prev) => prev.map((o) => o.id === orderId
-        ? { ...o, sellsy_invoice_status: "draft", sellsy_invoice_id: data.invoice_id, invoiced_at: new Date().toISOString() }
-        : o));
-      onBadgeCount?.(orders.filter((o) => o.id !== orderId && o.sellsy_invoice_status === "not_sent").length);
+      setOrders((prev) => {
+        const next = prev.map((o) => o.id === orderId
+          ? { ...o, sellsy_invoice_status: "draft" as InvoicingStatus, sellsy_invoice_id: data.invoice_id, invoiced_at: new Date().toISOString() }
+          : o);
+        onBadgeCount?.(next.filter((o) => o.sellsy_invoice_status === "not_sent").length);
+        return next;
+      });
       return { success: true };
     } finally {
       setSendingIds((prev) => { const s = new Set(prev); s.delete(orderId); return s; });
     }
-  }, [orders, onBadgeCount]);
+  }, [onBadgeCount]);
 
   // ── Send + close modal ────────────────────────────────────────────────────
 
@@ -432,7 +435,7 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
     const result = await sendInvoice(orderId, subject, note, dueDate);
     if (result.success) {
       toast({ title: "Invoice created as draft in Sellsy" });
-      setPreviewOrder(null);
+      setPreviewOrderId(null);
     } else {
       toast({ title: "Failed to create invoice", description: result.error, variant: "destructive" });
     }
@@ -510,6 +513,9 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
   };
 
   const selectedCount = [...selected].filter((id) => filtered.some((o) => o.id === id)).length;
+
+  // Derive current preview order from id so it always reflects latest state
+  const previewOrder = previewOrderId != null ? (orders.find((o) => o.id === previewOrderId) ?? null) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -642,7 +648,7 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
                           size="sm"
                           variant={isAlreadySent ? "outline" : "default"}
                           className="h-7 text-xs"
-                          onClick={() => setPreviewOrder(order)}
+                          onClick={() => setPreviewOrderId(order.id)}
                           disabled={isSending}
                         >
                           {isSending ? (
@@ -688,7 +694,7 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
       {previewOrder && (
         <PreviewModal
           order={previewOrder}
-          onClose={() => setPreviewOrder(null)}
+          onClose={() => setPreviewOrderId(null)}
           onSend={handleModalSend}
           sending={sendingIds.has(previewOrder.id)}
         />
