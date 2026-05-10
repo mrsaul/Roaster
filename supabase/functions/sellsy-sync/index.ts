@@ -583,7 +583,9 @@ function normalizeProduct(product: JsonRecord) {
   const taxes = Array.isArray(product.taxes) ? product.taxes : [];
   const firstTax = taxes[0] && typeof taxes[0] === "object" ? taxes[0] as JsonRecord : null;
   const sellsyTaxId = firstTax ? (typeof firstTax.id === "string" ? firstTax.id : String(firstTax.id ?? "")) || null : null;
-  const sellsyTaxRate = firstTax && firstTax.rate != null ? Number(firstTax.rate) : null;
+  const sellsyTaxRate = firstTax && firstTax.rate != null
+    ? (Number.isFinite(Number(firstTax.rate)) ? Number(firstTax.rate) : null)
+    : null;
 
   return {
     row: {
