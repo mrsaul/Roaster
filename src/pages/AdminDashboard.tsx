@@ -380,7 +380,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [adminOrders, approveOrder]);
 
-
   /* ── Order item editing (only for "received" orders) ── */
   const recalcOrderTotals = useCallback(async (orderId: string) => {
     const { data: items } = await supabase
@@ -711,7 +710,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     })),
     [adminOrders],
   );
-
 
   /* ── Packaging sheet export ── */
   const parsePackagingSheetId = (input: string): string | null => {
