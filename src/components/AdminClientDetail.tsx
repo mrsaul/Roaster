@@ -16,30 +16,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO } from "date-fns";
+import type { Company } from "@/lib/companyTypes";
 
-export type AppClient = {
-  id: string;
-  user_id: string;
-  company_name: string | null;
-  contact_name: string | null;
-  email: string | null;
-  phone: string | null;
-  delivery_address: string | null;
-  pricing_tier: string | null;
-  pricing_tier_id: string | null;
-  sellsy_client_id: string | null;
-  onboarding_status: string | null;
-  client_data_mode: "sellsy" | "custom";
-  custom_company_name: string | null;
-  custom_contact_name: string | null;
-  custom_email: string | null;
-  custom_phone: string | null;
-  custom_delivery_address: string | null;
-  custom_pricing_tier: string | null;
-  last_synced_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
+// Re-export Company as AppClient for backward compatibility with files that still import AppClient
+export type { Company as AppClient };
 
 type PricingTierOption = {
   id: string;
@@ -49,13 +29,12 @@ type PricingTierOption = {
 };
 
 interface Props {
-  client: AppClient | null;
+  client: Company | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }
 
-// ── Draft-persisted form data ─────────────────────────────────────────────────
 type ClientEditFormData = {
   dataMode: "sellsy" | "custom";
   companyName: string;
@@ -67,30 +46,26 @@ type ClientEditFormData = {
   pricingTierId: string | null;
 };
 
-function clientToFormData(client: AppClient): ClientEditFormData {
+function clientToFormData(c: Company): ClientEditFormData {
   return {
-    dataMode: client.client_data_mode ?? "custom",
-    companyName: client.custom_company_name ?? client.company_name ?? "",
-    contactName: client.custom_contact_name ?? client.contact_name ?? "",
-    email: client.custom_email ?? client.email ?? "",
-    phone: client.custom_phone ?? client.phone ?? "",
-    deliveryAddress: client.custom_delivery_address ?? client.delivery_address ?? "",
-    pricingTier: client.custom_pricing_tier ?? client.pricing_tier ?? "standard",
-    pricingTierId: client.pricing_tier_id ?? null,
+    dataMode: (c.client_data_mode as "sellsy" | "custom") ?? "custom",
+    companyName: c.name ?? "",
+    contactName: "",           // contacts are now a separate table; edit inline later
+    email: c.email ?? "",
+    phone: c.phone ?? "",
+    deliveryAddress: "",       // addresses are in company_addresses; shown separately
+    pricingTier: c.rate_category ?? "standard",
+    pricingTierId: c.pricing_tier_id ?? null,
   };
 }
 
 export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props) {
   const { toast } = useToast();
-
-  // Transient UI state — not persisted
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pendingModeSwitch, setPendingModeSwitch] = useState<"sellsy" | "custom" | null>(null);
   const [tierOptions, setTierOptions] = useState<PricingTierOption[]>([]);
-  const [pendingTierChange, setPendingTierChange] = useState<string | null>(null);
 
-  // ── Draft-persisted form state (key includes client id for per-client drafts) ──
   const defaultFormData = client ? clientToFormData(client) : {
     dataMode: "custom" as const, companyName: "", contactName: "", email: "",
     phone: "", deliveryAddress: "", pricingTier: "standard", pricingTierId: null,
@@ -108,25 +83,23 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     defaultFormData,
   );
 
-  const { dataMode, companyName, contactName, email, phone, deliveryAddress, pricingTier, pricingTierId } = form;
+  const { dataMode, companyName, email, phone, pricingTier, pricingTierId } = form;
 
-  // Field-specific setters
-  const setDataMode = (v: "sellsy" | "custom") => setForm(p => ({ ...p, dataMode: v }));
   const setCompanyName = (v: string) => setForm(p => ({ ...p, companyName: v }));
-  const setContactName = (v: string) => setForm(p => ({ ...p, contactName: v }));
   const setEmail = (v: string) => setForm(p => ({ ...p, email: v }));
   const setPhone = (v: string) => setForm(p => ({ ...p, phone: v }));
-  const setDeliveryAddress = (v: string) => setForm(p => ({ ...p, deliveryAddress: v }));
   const setPricingTier = (v: string) => setForm(p => ({ ...p, pricingTier: v }));
   const setPricingTierId = (v: string | null) => setForm(p => ({ ...p, pricingTierId: v }));
 
   useEffect(() => {
     if (!open) return;
-    supabase.from("pricing_tiers").select("id, name, product_discount_percent, delivery_discount_percent").eq("is_active", true).order("name")
+    supabase
+      .from("pricing_tiers")
+      .select("id, name, product_discount_percent, delivery_discount_percent")
+      .eq("is_active", true)
+      .order("name")
       .then(({ data }) => setTierOptions((data ?? []) as PricingTierOption[]));
   }, [open]);
-
-  const isSellsyMode = dataMode === "sellsy";
 
   const handleModeSwitch = (newMode: "sellsy" | "custom") => {
     if (newMode === dataMode) return;
@@ -137,22 +110,16 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     if (!pendingModeSwitch || !client) return;
     if (pendingModeSwitch === "custom") {
       setForm(p => ({
-        ...p,
-        dataMode: "custom",
-        companyName: client.company_name ?? "",
-        contactName: client.contact_name ?? "",
+        ...p, dataMode: "custom",
+        companyName: client.name ?? "",
         email: client.email ?? "",
         phone: client.phone ?? "",
-        deliveryAddress: client.delivery_address ?? "",
-        pricingTier: client.pricing_tier ?? "standard",
+        pricingTier: client.rate_category ?? "standard",
       }));
-    }
-    if (pendingModeSwitch === "sellsy") {
+    } else {
       setForm(p => ({
-        ...p,
-        dataMode: "sellsy",
-        companyName: "", contactName: "", email: "",
-        phone: "", deliveryAddress: "", pricingTier: "",
+        ...p, dataMode: "sellsy",
+        companyName: "", email: "", phone: "", pricingTier: "",
       }));
     }
     setPendingModeSwitch(null);
@@ -163,23 +130,20 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     setSaving(true);
     try {
       const { error } = await supabase
-        .from("client_onboarding")
+        .from("companies")
         .update({
           client_data_mode: dataMode,
-          custom_company_name: dataMode === "custom" ? (companyName || null) : null,
-          custom_contact_name: dataMode === "custom" ? (contactName || null) : null,
-          custom_email: dataMode === "custom" ? (email || null) : null,
-          custom_phone: dataMode === "custom" ? (phone || null) : null,
-          custom_delivery_address: dataMode === "custom" ? (deliveryAddress || null) : null,
-          custom_pricing_tier: dataMode === "custom" ? (pricingTier || null) : null,
+          name: companyName || client.name,
+          email: email || null,
+          phone: phone || null,
+          rate_category: pricingTier || null,
           pricing_tier_id: pricingTierId,
         })
         .eq("id", client.id);
       if (error) throw error;
       clearDraft();
-      toast({ title: "Client updated" });
+      toast({ title: "Client saved" });
       onSaved();
-      onOpenChange(false);
     } catch (err) {
       toast({ title: "Save failed", description: String(err), variant: "destructive" });
     } finally {
@@ -187,256 +151,159 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
     }
   };
 
-  if (!client) return null;
+  const handleSellsySync = async () => {
+    if (!client?.sellsy_client_id) {
+      toast({ title: "No Sellsy ID", description: "Add a Sellsy Client ID first.", variant: "destructive" });
+      return;
+    }
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
+      });
+      if (error || !data?.success) throw new Error(error?.message ?? data?.error ?? "Sync failed");
+      toast({ title: "Synced from Sellsy" });
+      onSaved();
+    } catch (err) {
+      toast({ title: "Sync failed", description: String(err), variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
-  const resolvedCompany = isSellsyMode ? (client.company_name ?? "—") : (companyName || (client.company_name ?? "—"));
-  const resolvedContact = isSellsyMode ? (client.contact_name ?? "—") : (contactName || (client.contact_name ?? "—"));
+  const isSellsyMode = dataMode === "sellsy";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {resolvedCompany}
-              <Badge
-                variant={client.onboarding_status === "completed" ? "default" : "secondary"}
-                className="text-[10px]"
-              >
-                {client.onboarding_status === "completed" ? "Active" : "Pending"}
-              </Badge>
-            </DialogTitle>
-            <DialogDescription>Manage client profile and data source.</DialogDescription>
+            <DialogTitle>{client?.name ?? "Client"}</DialogTitle>
+            <DialogDescription>
+              {client?.sellsy_client_id
+                ? `Sellsy ID: ${client.sellsy_client_id}`
+                : "App-only client — not linked to Sellsy"}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
             {showDraftBanner && draftSavedAt && (
-              <DraftBanner savedAt={draftSavedAt} onDiscard={discardDraft} />
+              <DraftBanner savedAt={draftSavedAt} onDiscard={() => { discardDraft(); }} />
             )}
-            {/* Data Source Mode */}
+
+            {/* Mode toggle */}
             <div className="rounded-xl border-2 border-border p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Client Data Source</p>
+              <p className="text-sm font-medium text-foreground">Data Source</p>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("sellsy")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    isSellsyMode
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Link2 className={cn("h-4 w-4 shrink-0", isSellsyMode ? "text-primary" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", isSellsyMode ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                    <p className="text-[11px] text-muted-foreground">Read-only data</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleModeSwitch("custom")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                    !isSellsyMode
-                      ? "border-accent-foreground bg-accent/50"
-                      : "border-border hover:border-muted-foreground/50"
-                  )}
-                >
-                  <Unlink2 className={cn("h-4 w-4 shrink-0", !isSellsyMode ? "text-accent-foreground" : "text-muted-foreground")} />
-                  <div>
-                    <p className={cn("text-sm font-medium", !isSellsyMode ? "text-accent-foreground" : "text-foreground")}>Custom Override</p>
-                    <p className="text-[11px] text-muted-foreground">Edit in app</p>
-                  </div>
-                </button>
+                {(["custom", "sellsy"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => handleModeSwitch(mode)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
+                      dataMode === mode
+                        ? mode === "sellsy" ? "border-primary bg-primary/5" : "border-accent-foreground bg-accent/50"
+                        : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    {mode === "custom"
+                      ? <Unlink2 className={cn("h-4 w-4 shrink-0", dataMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
+                      : <Link2 className={cn("h-4 w-4 shrink-0", dataMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
+                    }
+                    <div>
+                      <p className="text-sm font-medium">{mode === "custom" ? "App Only" : "Sync with Sellsy"}</p>
+                      <p className="text-[11px] text-muted-foreground">{mode === "custom" ? "Editable in app" : "Read-only data"}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
 
-              {isSellsyMode ? (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
-                  <Link2 className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-xs text-primary font-medium">Synced with Sellsy — contact & delivery fields are read-only</p>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg bg-accent/30 border border-accent px-3 py-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-accent-foreground" />
-                  <p className="text-xs text-accent-foreground font-medium">Custom override — changes apply only inside the app</p>
+              {/* Sellsy sync button */}
+              {isSellsyMode && client?.sellsy_client_id && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Button variant="outline" size="sm" onClick={handleSellsySync} disabled={syncing} className="gap-2">
+                    {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Sync from Sellsy
+                  </Button>
+                  {client.last_synced_at && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {format(parseISO(client.last_synced_at), "d MMM HH:mm")}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Sellsy ID (always read-only) */}
-            <div className="rounded-lg bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Sellsy Client ID (for invoicing)</p>
-              <p className="mt-1 text-sm font-mono text-foreground">{client.sellsy_client_id ?? "Not linked"}</p>
-            </div>
-
-            {/* Editable / Read-only fields */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Company Name</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm font-medium text-foreground">{client.company_name ?? "—"}</p>
-                  </div>
-                ) : (
-                  <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company name" />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Contact Name</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground">{client.contact_name ?? "—"}</p>
-                  </div>
-                ) : (
-                  <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Contact name" />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Email</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground">{client.email ?? "—"}</p>
-                  </div>
-                ) : (
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@company.com" />
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Phone</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground">{client.phone ?? "—"}</p>
-                  </div>
-                ) : (
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" />
-                )}
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <p className="text-xs text-muted-foreground">Delivery Address</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground">{client.delivery_address ?? "—"}</p>
-                  </div>
-                ) : (
-                  <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
-                )}
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <p className="text-xs text-muted-foreground">Pricing Tier</p>
-                {isSellsyMode ? (
-                  <div className="rounded-lg bg-muted/40 p-3">
-                    <p className="text-sm text-foreground capitalize">{client.pricing_tier ?? "standard"}</p>
-                  </div>
-                ) : tierOptions.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => { setPricingTierId(null); setPricingTier("standard"); }}
-                        className={cn(
-                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                          !pricingTierId
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
-                        )}
-                      >
-                        No tier (standard)
-                      </button>
-                      {tierOptions.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => {
-                            if (pricingTierId && pricingTierId !== t.id) {
-                              setPendingTierChange(t.id);
-                            } else {
-                              setPricingTierId(t.id);
-                              setPricingTier(t.name);
-                            }
-                          }}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                            pricingTierId === t.id
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
-                          )}
-                        >
-                          {t.name}
-                          {t.product_discount_percent > 0 && ` (${t.product_discount_percent}%)`}
-                        </button>
-                      ))}
-                    </div>
-                    {pricingTierId && (() => {
-                      const sel = tierOptions.find((t) => t.id === pricingTierId);
-                      if (!sel) return null;
-                      return (
-                        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                          {sel.product_discount_percent > 0 && <span>{sel.product_discount_percent}% off products</span>}
-                          {sel.product_discount_percent > 0 && sel.delivery_discount_percent > 0 && <span> · </span>}
-                          {sel.delivery_discount_percent > 0 && (
-                            <span>{sel.delivery_discount_percent === 100 ? "Free delivery" : `${sel.delivery_discount_percent}% off delivery`}</span>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No pricing tiers created yet. Create tiers in the Pricing section.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Sync from Sellsy */}
-            {client.sellsy_client_id && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {client.last_synced_at
-                    ? `Last synced: ${format(parseISO(client.last_synced_at), "MMM d, yyyy HH:mm")}`
-                    : "Never synced with Sellsy"}
+            {/* Editable fields */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-foreground">Company Information</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <p className="text-xs text-muted-foreground">Company Name</p>
+                  <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} disabled={isSellsyMode} />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={syncing}
-                  className="gap-1.5 text-xs h-7"
-                  onClick={async () => {
-                    setSyncing(true);
-                    try {
-                      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
-                        body: { mode: "sync-client", sellsy_client_id: client.sellsy_client_id, client_id: client.id },
-                      });
-                      if (error) throw error;
-                      if (!data?.success) throw new Error(data?.error ?? "Sync failed");
-                      toast({ title: "Client synced from Sellsy" });
-                      onSaved();
-                    } catch (err) {
-                      toast({ title: "Sync failed", description: String(err), variant: "destructive" });
-                    } finally {
-                      setSyncing(false);
-                    }
-                  }}
-                >
-                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                  Sync from Sellsy
-                </Button>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <Input value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSellsyMode} />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Phone</p>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={isSellsyMode} />
+                </div>
+              </div>
+            </div>
+
+            {/* Pricing tier */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-foreground">Pricing</p>
+              <div className="flex flex-wrap gap-1.5">
+                {tierOptions.map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => { setPricingTier(tier.name); setPricingTierId(tier.id); }}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      pricingTierId === tier.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tier.name}
+                  </button>
+                ))}
+                {tierOptions.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No active pricing tiers</p>
+                )}
+              </div>
+            </div>
+
+            {/* Sellsy fields — read-only metadata */}
+            {client?.siret && (
+              <div className="rounded-lg bg-muted/30 p-3 space-y-1 text-xs text-muted-foreground">
+                {client.siret && <p>SIRET: <span className="font-mono text-foreground">{client.siret}</span></p>}
+                {client.vat_number && <p>TVA: <span className="font-mono text-foreground">{client.vat_number}</span></p>}
+                {client.legal_company_name && <p>Raison sociale: <span className="text-foreground">{client.legal_company_name}</span></p>}
               </div>
             )}
 
-            {/* Onboarding info */}
-            <div className="rounded-lg bg-muted/30 border border-dashed border-border px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">
-                Registered: {format(parseISO(client.created_at), "MMM d, yyyy")} · Status: <span className="capitalize font-medium">{client.onboarding_status ?? "pending"}</span>
-              </p>
-            </div>
+            {/* Warning: Sellsy mode but no ID */}
+            {isSellsyMode && !client?.sellsy_client_id && (
+              <div className="flex items-start gap-2 rounded-lg bg-warning/10 border border-warning/20 p-3">
+                <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Sellsy mode is active but no Sellsy Client ID is set. Data cannot be synced.
+                </p>
+              </div>
+            )}
 
-            {/* Save */}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save changes
+                Save
               </Button>
             </div>
           </div>
@@ -444,55 +311,19 @@ export function AdminClientDetail({ client, open, onOpenChange, onSaved }: Props
       </Dialog>
 
       {/* Mode switch confirmation */}
-      <AlertDialog open={!!pendingModeSwitch} onOpenChange={(open) => !open && setPendingModeSwitch(null)}>
+      <AlertDialog open={pendingModeSwitch !== null} onOpenChange={(v) => { if (!v) setPendingModeSwitch(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              {pendingModeSwitch === "custom" ? "Switch to Custom Override?" : "Switch to Sellsy Sync?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Switch to {pendingModeSwitch === "custom" ? "App Only" : "Sellsy"} mode?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingModeSwitch === "custom"
-                ? "You will override Sellsy data. Changes will apply only inside the app. Sellsy invoicing data remains unchanged."
-                : "App overrides to contact info, delivery address, and pricing will be lost and replaced by Sellsy data."}
+                ? "Data will be editable in the app. Sellsy fields will be copied as a starting point."
+                : "Data will be read from Sellsy. App edits will be overwritten on next sync."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmModeSwitch}>
-              {pendingModeSwitch === "custom" ? "Use Custom Override" : "Restore Sellsy Sync"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Tier change warning */}
-      <AlertDialog open={!!pendingTierChange} onOpenChange={(v) => !v && setPendingTierChange(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Change pricing tier?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will affect all future orders for this client. Existing orders will not be recalculated.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (pendingTierChange) {
-                const tier = tierOptions.find((t) => t.id === pendingTierChange);
-                setForm(p => ({
-                  ...p,
-                  pricingTierId: pendingTierChange,
-                  pricingTier: tier?.name ?? p.pricingTier,
-                }));
-              }
-              setPendingTierChange(null);
-            }}>
-              Change Tier
-            </AlertDialogAction>
+            <AlertDialogAction onClick={confirmModeSwitch}>Switch</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
