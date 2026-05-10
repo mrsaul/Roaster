@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-// HIDDEN — Sellsy — preserved for future use
-// import { InvoicingView, type InvoicingOrder, type InvoicingStatus } from "@/components/InvoicingView";
-type InvoicingStatus = "not_sent" | "sent" | "error";
-type InvoicingOrder = {
-  id: string; user_id: string; client_name: string | null; user_email: string | null;
-  delivery_date: string; total_kg: number; total_price: number; status: OrderStatus;
-  sellsy_id: string | null; invoicing_status: InvoicingStatus; last_invoice_sync: string | null;
-  has_sellsy_client_id: boolean;
-  items: { product_name: string; quantity: number; price_per_kg: number }[];
-};
+import { InvoicingView } from "@/components/InvoicingView";
 import { PricingTiersView } from "@/components/PricingTiersView";
 import { UserManagementView } from "@/components/UserManagementView";
 import { StockView } from "@/components/StockView";
@@ -130,15 +121,10 @@ type AdminOrder = {
   total_kg: number;
   total_price: number;
   status: OrderStatus;
-  // HIDDEN — Sellsy — preserved for future use
-  // sellsy_id: string | null;
   created_at: string;
   is_roasted: boolean;
   is_packed: boolean;
   is_labeled: boolean;
-  // HIDDEN — Sellsy — preserved for future use
-  // invoicing_status: InvoicingStatus;
-  // last_invoice_sync: string | null;
   items: AdminOrderItem[];
 };
 
@@ -157,9 +143,8 @@ function formatDate(value: string | null) {
 /* ─── Component ─── */
 
 const ADMIN_SECTION_KEY = "pr_admin_section";
-// HIDDEN — Sellsy — "invoicing" section preserved for future use
-type AdminSection = "orders" | "packaging" | "roaster" | "clients" | "products" | "team" | "profile" | "pricing" | "stock" | "health";
-const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "clients", "products", "team", "profile", "pricing", "stock", "health"];
+type AdminSection = "orders" | "packaging" | "roaster" | "invoicing" | "clients" | "products" | "team" | "profile" | "pricing" | "stock" | "health";
+const VALID_ADMIN_SECTIONS: AdminSection[] = ["orders", "packaging", "roaster", "invoicing", "clients", "products", "team", "profile", "pricing", "stock", "health"];
 
 function loadAdminSection(): AdminSection {
   try {
@@ -177,8 +162,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try { sessionStorage.setItem(ADMIN_SECTION_KEY, section); } catch { /* ignore */ }
     setActiveSectionRaw(section);
   }, []);
-  // HIDDEN — Sellsy — preserved for future use
-  // const [invoiceSendingIds, setInvoiceSendingIds] = useState<Set<string>>(new Set());
+  const [invoicingBadge, setInvoicingBadge] = useState<number | null>(null);
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -273,15 +257,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           total_kg: Number(o.total_kg),
           total_price: Number(o.total_price),
           status: normalizeOrderStatus(o.status),
-          // HIDDEN — Sellsy — preserved for future use
-          // sellsy_id: o.sellsy_id,
           created_at: o.created_at,
           is_roasted: Boolean(o.is_roasted),
           is_packed: Boolean(o.is_packed),
           is_labeled: Boolean(o.is_labeled),
-          // HIDDEN — Sellsy — preserved for future use
-          // invoicing_status: (o.invoicing_status as InvoicingStatus) ?? "not_sent",
-          // last_invoice_sync: o.last_invoice_sync ?? null,
           items: (o.order_items ?? []).map((i: any) => ({
             id: i.id,
             product_id: i.product_id,
@@ -401,10 +380,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   }, [adminOrders, approveOrder]);
 
-  /* HIDDEN — Sellsy — preserved for future use
-  const sendInvoiceToSellsy = useCallback(async (orderId: string) => { ... }, []);
-  const bulkSendInvoices = useCallback(async (orderIds: string[]) => { ... }, []);
-  */
 
   /* ── Order item editing (only for "received" orders) ── */
   const recalcOrderTotals = useCallback(async (orderId: string) => {
@@ -674,8 +649,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     orders: "Orders",
     packaging: "Packaging",
     roaster: "Roaster",
-    // HIDDEN — Sellsy — preserved for future use
-    // invoicing: "Invoicing",
+    invoicing: "Invoicing",
     clients: "Clients",
     products: "Products",
     pricing: "Pricing",
@@ -688,9 +662,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   /* ── Sidebar nav items ── */
   const [menuOpen, setMenuOpen] = useState(false);
   const roasterBadge = adminOrders.filter((o) => ["approved", "packaging"].includes(o.status) && !o.is_roasted).length;
-  // HIDDEN — Sellsy — preserved for future use
-  // const invoicingBadge = adminOrders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status) && o.invoicing_status === "not_sent").length;
-
   const primaryNavItems = [
     { key: "orders" as const, icon: Package, label: "Orders", badge: receivedCount > 0 ? receivedCount : null },
     { key: "roaster" as const, icon: Flame, label: "Roaster", badge: roasterBadge > 0 ? roasterBadge : null },
@@ -698,8 +669,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   ];
 
   const menuSubItems = [
-    // HIDDEN — Sellsy — preserved for future use
-    // { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge > 0 ? invoicingBadge : null },
+    { key: "invoicing" as const, icon: FileText, label: "Invoicing", badge: invoicingBadge != null && invoicingBadge > 0 ? invoicingBadge : null },
     { key: "clients" as const, icon: Users, label: "Clients", badge: null },
     { key: "products" as const, icon: Coffee, label: "Products", badge: null },
     { key: "pricing" as const, icon: BadgeEuro, label: "Pricing", badge: null },
@@ -742,20 +712,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     [adminOrders],
   );
 
-  /* HIDDEN — Sellsy — preserved for future use
-  const invoicingOrders: InvoicingOrder[] = useMemo(() =>
-    adminOrders.map((o) => {
-      const client = clients.find((c) => c.user_id === o.user_id);
-      return {
-        id: o.id, user_id: o.user_id, client_name: o.client_name, user_email: o.user_email,
-        delivery_date: o.delivery_date, total_kg: o.total_kg, total_price: o.total_price,
-        status: o.status, sellsy_id: o.sellsy_id, invoicing_status: o.invoicing_status,
-        last_invoice_sync: o.last_invoice_sync, has_sellsy_client_id: Boolean(client?.sellsy_client_id),
-        items: o.items.map((i) => ({ product_name: i.product_name, quantity: i.quantity, price_per_kg: i.price_per_kg })),
-      };
-    }), [adminOrders, clients],
-  );
-  */
 
   /* ── Packaging sheet export ── */
   const parsePackagingSheetId = (input: string): string | null => {
@@ -1148,15 +1104,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </div>
             )}
 
-            {/* HIDDEN — Sellsy — preserved for future use */}
-            {/* {activeSection === "invoicing" && (
-              <InvoicingView
-                orders={invoicingOrders}
-                onSendToSellsy={sendInvoiceToSellsy}
-                onBulkSendToSellsy={bulkSendInvoices}
-                sendingIds={invoiceSendingIds}
-              />
-            )} */}
+            {activeSection === "invoicing" && (
+              <InvoicingView onBadgeCount={(n) => setInvoicingBadge(n)} />
+            )}
 
             {/* ═══════════ CLIENTS ═══════════ */}
             {activeSection === "clients" && (
