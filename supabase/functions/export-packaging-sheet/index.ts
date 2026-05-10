@@ -189,13 +189,10 @@ type RawOrder = {
   order_items: OrderItem[];
 };
 
-type Profile    = { id: string; full_name: string | null; email: string | null };
-type Onboarding = {
+type ContactWithCompany = {
   user_id: string;
   company_name: string | null;
-  custom_company_name: string | null;
-  delivery_address: string | null;
-  custom_delivery_address: string | null;
+  address_line1: string | null;
 };
 
 // ── Build one packing-list tab (rows + format requests) ───────────────────────
@@ -420,30 +417,34 @@ Deno.serve(async (req: Request) => {
     if (ordersErr) throw ordersErr;
     const orders = (ordersRaw ?? []) as RawOrder[];
 
-    // ── Fetch client profiles & onboarding ───────────────────────────────────
+    // ── Fetch client info via contacts → companies + company_addresses ────────
     const userIds = [...new Set(orders.map((o) => o.user_id))];
-    const [profilesRes, onboardingRes] = await Promise.all([
-      userIds.length > 0 ? db.from("profiles").select("id, full_name, email").in("id", userIds) : Promise.resolve({ data: [] }),
-      userIds.length > 0
-        ? db.from("client_onboarding").select("user_id, company_name, custom_company_name, delivery_address, custom_delivery_address").in("user_id", userIds)
-        : Promise.resolve({ data: [] }),
-    ]);
+    const contactsRes = userIds.length > 0
+      ? await db
+          .from("contacts")
+          .select("user_id, companies(name, company_addresses(label, address_line1))")
+          .in("user_id", userIds)
+      : { data: [] };
 
-    const profileMap    = new Map<string, Profile>(((profilesRes.data ?? []) as Profile[]).map((p) => [p.id, p]));
-    const onboardingMap = new Map<string, Onboarding>(((onboardingRes.data ?? []) as Onboarding[]).map((o) => [o.user_id, o]));
+    const contactMap = new Map<string, ContactWithCompany>(
+      ((contactsRes.data ?? []) as any[]).map((c) => {
+        const company = c.companies as any;
+        const deliveryAddr = (company?.company_addresses ?? []).find((a: any) => a.label === "Delivery");
+        return [c.user_id, {
+          user_id: c.user_id,
+          company_name: company?.name ?? null,
+          address_line1: deliveryAddr?.address_line1 ?? null,
+        }];
+      })
+    );
 
     const getClientName = (uid: string): string => {
-      const ob = onboardingMap.get(uid);
-      if (ob?.custom_company_name) return ob.custom_company_name;
-      if (ob?.company_name)        return ob.company_name;
-      const p = profileMap.get(uid);
-      return p?.full_name ?? p?.email ?? uid.slice(0, 8);
+      const ct = contactMap.get(uid);
+      return ct?.company_name ?? uid.slice(0, 8);
     };
     const getDeliveryAddress = (uid: string): string => {
-      const ob = onboardingMap.get(uid);
-      if (ob?.custom_delivery_address) return ob.custom_delivery_address;
-      if (ob?.delivery_address)        return ob.delivery_address;
-      return "—";
+      const ct = contactMap.get(uid);
+      return ct?.address_line1 ?? "—";
     };
 
     // ── Group orders by delivery date ─────────────────────────────────────────

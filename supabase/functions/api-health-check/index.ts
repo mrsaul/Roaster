@@ -502,7 +502,7 @@ async function checkSupabase(): Promise<IntegrationStatus> {
   try {
     const { result, latency_ms } = await timed(async () => {
       const { count, error } = await supabase
-        .from("client_onboarding")
+        .from("companies")
         .select("*", { count: "exact", head: true });
       if (error) throw new Error(error.message);
       return count;
@@ -510,7 +510,7 @@ async function checkSupabase(): Promise<IntegrationStatus> {
     checks.clients_table = {
       status: "ok",
       latency_ms,
-      detail: `client_onboarding table: ${result} rows`,
+      detail: `companies table: ${result} rows`,
     };
   } catch (err) {
     checks.clients_table = { status: "degraded", error: String(err) };
