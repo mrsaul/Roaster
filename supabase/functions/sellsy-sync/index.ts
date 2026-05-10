@@ -1069,6 +1069,7 @@ async function handleHealthCheck(user: AuthenticatedUser) {
 async function handleCreateInvoice(
   supabaseClient: ReturnType<typeof createClient>,
   body: JsonRecord,
+  accessToken: string,
 ): Promise<Response> {
   const orderId = typeof body.order_id === "string" ? body.order_id : null;
   const note = typeof body.note === "string" ? body.note : "";
@@ -1176,14 +1177,7 @@ async function handleCreateInvoice(
   }
 
   // 5. POST to Sellsy
-  let token: string;
-  try {
-    token = await getSellsyAccessToken();
-  } catch (e) {
-    return new Response(JSON.stringify({ success: false, error: `Sellsy auth failed: ${String(e)}` }), {
-      status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const token = accessToken;
 
   const sellsyResult = await fetchSellsy("/v2/invoices", token, {
     method: "POST",
@@ -1193,14 +1187,20 @@ async function handleCreateInvoice(
 
   if (!sellsyResult.response.ok) {
     const errText = sellsyResult.payload.text ?? JSON.stringify(sellsyResult.payload);
-    return new Response(JSON.stringify({ success: false, error: `Sellsy API error ${sellsyResult.response.status}: ${errText}` }), {
+    const errMsg = `Sellsy API error ${sellsyResult.response.status}: ${errText}`;
+    await supabaseClient.from("orders").update({
+      sellsy_invoice_status: "error",
+      sellsy_invoice_error: errMsg,
+    }).eq("id", orderId);
+    return new Response(JSON.stringify({ success: false, error: errMsg }), {
       status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   const sellsyData = sellsyResult.payload.data as JsonRecord;
-  const invoiceId = String((sellsyData as any)?.data?.id ?? "");
-  const invoiceUrl = String((sellsyData as any)?.data?._links?.self?.href ?? "");
+  const invoiceObj = (sellsyData?.id != null ? sellsyData : (sellsyData as any)?.data) as JsonRecord | null ?? {};
+  const invoiceId = String(invoiceObj?.id ?? "");
+  const invoiceUrl = String((invoiceObj as any)?._links?.self?.href ?? "");
 
   // 6. Update orders row
   await supabaseClient.from("orders").update({
@@ -1247,7 +1247,7 @@ Deno.serve(async (req) => {
     }
 
     if (body?.mode === "create-invoice") {
-      return await handleCreateInvoice(createServiceSupabaseClient(), body);
+      return await handleCreateInvoice(createServiceSupabaseClient(), body, accessToken);
     }
 
     return await handleOrderSync(user, accessToken, body);
