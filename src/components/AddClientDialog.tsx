@@ -12,7 +12,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
-// ── Draft-persisted form data type ────────────────────────────────────────────
 type ClientFormData = {
   companyName: string;
   contactName: string;
@@ -26,15 +25,9 @@ type ClientFormData = {
 };
 
 const CLIENT_FORM_DEFAULT: ClientFormData = {
-  companyName: "",
-  contactName: "",
-  email: "",
-  phone: "",
-  deliveryAddress: "",
-  pricingTier: "standard",
-  notes: "",
-  sellsyClientId: "",
-  dataMode: "custom",
+  companyName: "", contactName: "", email: "", phone: "",
+  deliveryAddress: "", pricingTier: "standard", notes: "",
+  sellsyClientId: "", dataMode: "custom",
 };
 
 interface Props {
@@ -45,45 +38,25 @@ interface Props {
 
 export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   const { toast } = useToast();
-
-  // Transient UI state — not persisted
   const [saving, setSaving] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
 
-  // ── Draft-persisted form state ───────────────────────────────────────────
-  const {
-    value: form,
-    setValue: setForm,
-    clearDraft,
-    discardDraft,
-    savedAt: draftSavedAt,
-    showBanner: showDraftBanner,
+  const { value: form, setValue: setForm, clearDraft, discardDraft,
+    savedAt: draftSavedAt, showBanner: showDraftBanner,
   } = useDraftPersistence<ClientFormData>("add-client", CLIENT_FORM_DEFAULT);
 
-  // Destructure for JSX readability
   const { companyName, contactName, email, phone, deliveryAddress,
     pricingTier, notes, sellsyClientId, dataMode } = form;
 
-  // Field-specific setters
-  const setCompanyName = (v: string) => setForm(p => ({ ...p, companyName: v }));
-  const setContactName = (v: string) => setForm(p => ({ ...p, contactName: v }));
-  const setEmail = (v: string) => setForm(p => ({ ...p, email: v }));
-  const setPhone = (v: string) => setForm(p => ({ ...p, phone: v }));
-  const setDeliveryAddress = (v: string) => setForm(p => ({ ...p, deliveryAddress: v }));
-  const setPricingTier = (v: string) => setForm(p => ({ ...p, pricingTier: v }));
-  const setNotes = (v: string) => setForm(p => ({ ...p, notes: v }));
-  const setSellsyClientId = (v: string) => setForm(p => ({ ...p, sellsyClientId: v }));
-  const setDataMode = (v: "custom" | "sellsy") => setForm(p => ({ ...p, dataMode: v }));
+  const set = <K extends keyof ClientFormData>(k: K) =>
+    (v: ClientFormData[K]) => setForm(p => ({ ...p, [k]: v }));
 
-  const resetForm = () => {
-    discardDraft();
-    setDuplicateWarning(false);
-  };
+  const resetForm = () => { discardDraft(); setDuplicateWarning(false); };
 
   const checkDuplicate = async (emailValue: string) => {
     if (!emailValue.trim()) { setDuplicateWarning(false); return; }
     const { data } = await supabase
-      .from("client_onboarding")
+      .from("companies")
       .select("id")
       .eq("email", emailValue.trim())
       .limit(1);
@@ -92,49 +65,54 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
 
   const handleSave = async () => {
     if (!companyName.trim()) {
-      toast({ title: "Company name is required", variant: "destructive" });
-      return;
+      toast({ title: "Company name is required", variant: "destructive" }); return;
     }
     if (!email.trim()) {
-      toast({ title: "Email is required", variant: "destructive" });
-      return;
-    }
-    if (!deliveryAddress.trim()) {
-      toast({ title: "Delivery address is required", variant: "destructive" });
-      return;
+      toast({ title: "Email is required", variant: "destructive" }); return;
     }
     if (dataMode === "sellsy" && !sellsyClientId.trim()) {
-      toast({ title: "Sellsy Client ID is required for sync mode", variant: "destructive" });
-      return;
+      toast({ title: "Sellsy Client ID is required for sync mode", variant: "destructive" }); return;
     }
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      // 1. Insert company
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .insert({
+          name: companyName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || null,
+          notes: notes.trim() || null,
+          sellsy_client_id: sellsyClientId.trim() || null,
+          sellsy_id: sellsyClientId.trim() || null,
+          client_data_mode: dataMode,
+          rate_category: pricingTier,
+          onboarding_status: "completed",
+        })
+        .select("id")
+        .single();
+      if (companyError || !company) throw companyError ?? new Error("Company insert failed");
 
-      const { error } = await supabase.from("client_onboarding").insert({
-        user_id: crypto.randomUUID(),
-        company_name: companyName.trim(),
-        contact_name: contactName.trim() || null,
-        email: email.trim(),
-        phone: phone.trim() || null,
-        delivery_address: deliveryAddress.trim(),
-        pricing_tier: pricingTier,
-        notes: notes.trim() || null,
-        sellsy_client_id: sellsyClientId.trim() || null,
-        client_data_mode: dataMode,
-        custom_company_name: dataMode === "custom" ? companyName.trim() : null,
-        custom_contact_name: dataMode === "custom" ? (contactName.trim() || null) : null,
-        custom_email: dataMode === "custom" ? email.trim() : null,
-        custom_phone: dataMode === "custom" ? (phone.trim() || null) : null,
-        custom_delivery_address: dataMode === "custom" ? deliveryAddress.trim() : null,
-        custom_pricing_tier: dataMode === "custom" ? pricingTier : null,
-        onboarding_status: "completed",
-        current_step: 5,
-      });
+      // 2. Insert address if provided
+      if (deliveryAddress.trim()) {
+        await supabase.from("company_addresses").insert({
+          company_id: company.id,
+          label: "Delivery",
+          address_line1: deliveryAddress.trim(),
+        });
+      }
 
-      if (error) throw error;
+      // 3. Insert primary contact (no user_id yet — admin created, not self-registered)
+      if (contactName.trim() || email.trim()) {
+        await supabase.from("contacts").insert({
+          company_id: company.id,
+          last_name: contactName.trim() || companyName.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          is_primary: true,
+        });
+      }
 
       toast({ title: "Client created" });
       clearDraft();
@@ -148,7 +126,7 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { /* keep draft alive on close */ } onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { /* keep draft */ } onOpenChange(v); }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Client</DialogTitle>
@@ -160,24 +138,22 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
             <DraftBanner savedAt={draftSavedAt} onDiscard={resetForm} />
           )}
 
-          {/* Basic Info */}
           <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Basic Information</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Company Name *</p>
-                <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Company name" />
+                <Input value={companyName} onChange={(e) => set("companyName")(e.target.value)} placeholder="Company name" />
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Contact Name</p>
-                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Contact name" />
+                <Input value={contactName} onChange={(e) => set("contactName")(e.target.value)} placeholder="Contact name" />
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Email *</p>
                 <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="email" value={email}
+                  onChange={(e) => set("email")(e.target.value)}
                   onBlur={() => void checkDuplicate(email)}
                   placeholder="email@company.com"
                 />
@@ -187,21 +163,16 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
               </div>
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Phone</p>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" />
+                <Input value={phone} onChange={(e) => set("phone")(e.target.value)} placeholder="+33 6 12 34 56 78" />
               </div>
             </div>
           </div>
 
-          {/* Delivery */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-foreground">Delivery Information</p>
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Delivery Address *</p>
-              <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Full delivery address" />
-            </div>
+            <p className="text-sm font-medium text-foreground">Delivery Address</p>
+            <Input value={deliveryAddress} onChange={(e) => set("deliveryAddress")(e.target.value)} placeholder="Full delivery address" />
           </div>
 
-          {/* Business Settings */}
           <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Business Settings</p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -210,82 +181,63 @@ export function AddClientDialog({ open, onOpenChange, onCreated }: Props) {
                 <div className="flex gap-1.5">
                   {["standard", "premium", "wholesale"].map((tier) => (
                     <button
-                      key={tier}
-                      type="button"
-                      onClick={() => setPricingTier(tier)}
+                      key={tier} type="button"
+                      onClick={() => set("pricingTier")(tier)}
                       className={cn(
                         "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors capitalize",
                         pricingTier === tier
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                       )}
-                    >
-                      {tier}
-                    </button>
+                    >{tier}</button>
                   ))}
                 </div>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Notes</p>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes..." rows={2} />
+                <Textarea value={notes} onChange={(e) => set("notes")(e.target.value)} rows={2} />
               </div>
             </div>
           </div>
 
-          {/* Sellsy Integration */}
           <div className="rounded-xl border-2 border-border p-4 space-y-3">
             <p className="text-sm font-medium text-foreground">Sellsy Integration</p>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setDataMode("custom")}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                  dataMode === "custom"
-                    ? "border-accent-foreground bg-accent/50"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <Unlink2 className={cn("h-4 w-4 shrink-0", dataMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
-                <div>
-                  <p className={cn("text-sm font-medium", dataMode === "custom" ? "text-accent-foreground" : "text-foreground")}>App Only</p>
-                  <p className="text-[11px] text-muted-foreground">Editable in app</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDataMode("sellsy")}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
-                  dataMode === "sellsy"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-muted-foreground/50"
-                )}
-              >
-                <Link2 className={cn("h-4 w-4 shrink-0", dataMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
-                <div>
-                  <p className={cn("text-sm font-medium", dataMode === "sellsy" ? "text-primary" : "text-foreground")}>Sync with Sellsy</p>
-                  <p className="text-[11px] text-muted-foreground">Read-only data</p>
-                </div>
-              </button>
+              {(["custom", "sellsy"] as const).map((mode) => (
+                <button
+                  key={mode} type="button"
+                  onClick={() => set("dataMode")(mode)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all",
+                    dataMode === mode
+                      ? mode === "sellsy" ? "border-primary bg-primary/5" : "border-accent-foreground bg-accent/50"
+                      : "border-border hover:border-muted-foreground/50"
+                  )}
+                >
+                  {mode === "custom"
+                    ? <Unlink2 className={cn("h-4 w-4 shrink-0", dataMode === "custom" ? "text-accent-foreground" : "text-muted-foreground")} />
+                    : <Link2 className={cn("h-4 w-4 shrink-0", dataMode === "sellsy" ? "text-primary" : "text-muted-foreground")} />
+                  }
+                  <div>
+                    <p className="text-sm font-medium">{mode === "custom" ? "App Only" : "Sync with Sellsy"}</p>
+                    <p className="text-[11px] text-muted-foreground">{mode === "custom" ? "Editable in app" : "Read-only data"}</p>
+                  </div>
+                </button>
+              ))}
             </div>
-
-            {dataMode === "sellsy" && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Client ID *</p>
-                <Input value={sellsyClientId} onChange={(e) => setSellsyClientId(e.target.value)} placeholder="e.g. 12345678" className="font-mono" />
-              </div>
-            )}
-
-            {dataMode === "custom" && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Sellsy Client ID (optional)</p>
-                <Input value={sellsyClientId} onChange={(e) => setSellsyClientId(e.target.value)} placeholder="Link to Sellsy later" className="font-mono" />
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Sellsy Client ID {dataMode === "sellsy" ? "*" : "(optional)"}
+              </p>
+              <Input
+                value={sellsyClientId}
+                onChange={(e) => set("sellsyClientId")(e.target.value)}
+                placeholder="e.g. 12345678"
+                className="font-mono"
+              />
+            </div>
           </div>
 
-          {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
