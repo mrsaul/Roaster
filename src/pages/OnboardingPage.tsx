@@ -156,59 +156,90 @@ const OnboardingPage = ({ onComplete, existingData }: OnboardingPageProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: existing } = await supabase
-        .from("client_onboarding")
-        .select("id")
+      // Check for existing contact linked to this user
+      const { data: existingContact } = await supabase
+        .from("contacts")
+        .select("id, company_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (existing) {
-        const rpcArgs: Record<string, unknown> = {
-          _id: existing.id,
-          _company_name: data.company_name || null,
-          _legal_company_name: data.legal_company_name || null,
-          _vat_number: data.vat_number || null,
-          _siret: data.siret || null,
-          _contact_name: data.contact_name || null,
-          _email: data.email || user.email || null,
-          _phone: data.phone || null,
-          _delivery_address: data.delivery_address || null,
-          _delivery_instructions: data.delivery_instructions || null,
-          _preferred_delivery_days: data.preferred_delivery_days,
-          _delivery_time_window: data.delivery_time_window || null,
-          _coffee_type: data.coffee_type || null,
-          _estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
-          _grinder_type: data.grinder_type || null,
-          _notes: data.notes || null,
-          _current_step: nextStep,
-        };
-        if (status !== "pending") {
-          rpcArgs._onboarding_status = status;
-        }
-        const { error } = await supabase.rpc("user_update_own_onboarding", rpcArgs as any);
+      const companyPayload = {
+        name: data.company_name || user.email || "My Company",
+        legal_company_name: data.legal_company_name || null,
+        vat_number: data.vat_number || null,
+        siret: data.siret || null,
+        email: data.email || user.email || null,
+        phone: data.phone || null,
+        preferred_delivery_days: data.preferred_delivery_days,
+        delivery_time_window: data.delivery_time_window || null,
+        delivery_instructions: data.delivery_instructions || null,
+        coffee_type: data.coffee_type || null,
+        estimated_weekly_volume: data.estimated_weekly_volume
+          ? Number(data.estimated_weekly_volume) : null,
+        grinder_type: data.grinder_type || null,
+        notes: data.notes || null,
+        current_step: nextStep,
+        ...(status !== "pending" ? { onboarding_status: status } : {}),
+      };
+
+      if (existingContact?.company_id) {
+        // Update existing company
+        const { error } = await supabase
+          .from("companies")
+          .update(companyPayload)
+          .eq("id", existingContact.company_id);
         if (error) throw error;
+
+        // Update address if provided
+        if (data.delivery_address) {
+          const { data: existingAddr } = await supabase
+            .from("company_addresses")
+            .select("id")
+            .eq("company_id", existingContact.company_id)
+            .eq("label", "Delivery")
+            .maybeSingle();
+
+          if (existingAddr) {
+            await supabase.from("company_addresses")
+              .update({ address_line1: data.delivery_address, address_line2: data.delivery_instructions || null })
+              .eq("id", existingAddr.id);
+          } else {
+            await supabase.from("company_addresses").insert({
+              company_id: existingContact.company_id,
+              label: "Delivery",
+              address_line1: data.delivery_address,
+              address_line2: data.delivery_instructions || null,
+            });
+          }
+        }
       } else {
-        const { error } = await supabase.from("client_onboarding").insert({
+        // Create new company
+        const { data: newCompany, error: companyError } = await supabase
+          .from("companies")
+          .insert({ ...companyPayload, client_data_mode: "custom", onboarding_status: "pending" })
+          .select("id")
+          .single();
+        if (companyError || !newCompany) throw companyError ?? new Error("Company create failed");
+
+        // Create delivery address
+        if (data.delivery_address) {
+          await supabase.from("company_addresses").insert({
+            company_id: newCompany.id,
+            label: "Delivery",
+            address_line1: data.delivery_address,
+            address_line2: data.delivery_instructions || null,
+          });
+        }
+
+        // Create primary contact linked to this auth user
+        await supabase.from("contacts").insert({
+          company_id: newCompany.id,
           user_id: user.id,
-          company_name: data.company_name || null,
-          legal_company_name: data.legal_company_name || null,
-          vat_number: data.vat_number || null,
-          siret: data.siret || null,
-          contact_name: data.contact_name || null,
+          last_name: data.contact_name || data.company_name || user.email || "Contact",
           email: data.email || user.email || null,
           phone: data.phone || null,
-          delivery_address: data.delivery_address || null,
-          delivery_instructions: data.delivery_instructions || null,
-          preferred_delivery_days: data.preferred_delivery_days,
-          delivery_time_window: data.delivery_time_window || null,
-          coffee_type: data.coffee_type || null,
-          estimated_weekly_volume: data.estimated_weekly_volume ? Number(data.estimated_weekly_volume) : 0,
-          grinder_type: data.grinder_type || null,
-          notes: data.notes || null,
-          current_step: nextStep,
-          onboarding_status: status,
+          is_primary: true,
         });
-        if (error) throw error;
       }
     } finally {
       setSaving(false);

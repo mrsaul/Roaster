@@ -180,14 +180,33 @@ const Index = () => {
       return;
     }
 
-    // Regular user — check onboarding first
-    const { data: onboarding } = await supabase
-      .from("client_onboarding")
-      .select("*")
+    // Regular user — check onboarding via contacts→companies
+    const { data: contact } = await supabase
+      .from("contacts")
+      .select("id, company_id, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode)")
+      .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .maybeSingle();
 
-    if (!onboarding || onboarding.onboarding_status !== "completed") {
-      setOnboardingData(onboarding as Record<string, unknown> | null);
+    const company = (contact?.companies as any) ?? null;
+    if (!contact || !company || company.onboarding_status !== "completed") {
+      setOnboardingData(company ? {
+        company_name: company.name,
+        email: company.email,
+        phone: company.phone,
+        siret: company.siret,
+        vat_number: company.vat_number,
+        legal_company_name: company.legal_company_name,
+        preferred_delivery_days: company.preferred_delivery_days ?? [],
+        delivery_time_window: company.delivery_time_window,
+        coffee_type: company.coffee_type,
+        estimated_weekly_volume: company.estimated_weekly_volume,
+        grinder_type: company.grinder_type,
+        notes: company.notes,
+        current_step: company.current_step,
+        onboarding_status: company.onboarding_status,
+        _company_id: company.id,
+        _contact_id: contact.id,
+      } : null);
       setView("onboarding");
       return;
     }

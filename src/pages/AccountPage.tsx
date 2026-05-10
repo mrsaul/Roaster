@@ -37,13 +37,17 @@ export default function AccountPage({
     const load = async () => {
       const [{ data: userData }, { data: onboarding }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from("client_onboarding").select("company_name").maybeSingle(),
+        supabase
+          .from("contacts")
+          .select("companies(name)")
+          .eq("user_id", userData.user?.id ?? "")
+          .maybeSingle(),
       ]);
 
       if (cancelled) return;
 
       setUserEmail(userData.user?.email ?? null);
-      setCompanyName((onboarding as any)?.company_name ?? null);
+      setCompanyName((onboarding as any)?.companies?.name ?? null);
       setLoadingProfile(false);
     };
 
