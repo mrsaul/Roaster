@@ -26,6 +26,8 @@ type ProductRow = {
   price_per_kg: number;
   is_active: boolean;
   synced_at: string;
+  sellsy_tax_id: string | null;
+  sellsy_tax_rate: number | null;
 };
 
 type ProductParseError = {
@@ -577,6 +579,12 @@ function normalizeProduct(product: JsonRecord) {
   const description = typeof product.description === "string" ? product.description : null;
   const { price, parseError } = extractProductPrice(product);
 
+  // Extract tax info from Sellsy product response
+  const taxes = Array.isArray(product.taxes) ? product.taxes : [];
+  const firstTax = taxes[0] && typeof taxes[0] === "object" ? taxes[0] as JsonRecord : null;
+  const sellsyTaxId = firstTax ? (typeof firstTax.id === "string" ? firstTax.id : String(firstTax.id ?? "")) || null : null;
+  const sellsyTaxRate = firstTax && firstTax.rate != null ? Number(firstTax.rate) : null;
+
   return {
     row: {
       sellsy_id: sellsyId,
@@ -588,6 +596,8 @@ function normalizeProduct(product: JsonRecord) {
       price_per_kg: price,
       is_active: product.is_active === false ? false : product.active === false ? false : true,
       synced_at: new Date().toISOString(),
+      sellsy_tax_id: sellsyTaxId,
+      sellsy_tax_rate: sellsyTaxRate,
     } satisfies ProductRow,
     parseError,
   };
