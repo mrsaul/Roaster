@@ -68,12 +68,26 @@ function useOrdersQuery() {
         .order("created_at", { ascending: false });
       if (error) throw error;
 
-      // Two-step profiles join
+      // Two-step contacts join (contacts.user_id → companies.name)
       const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+      const { data: contactRows } = userIds.length > 0
+        ? await supabase
+            .from("contacts")
+            .select("user_id, first_name, last_name, email, companies(name)")
+            .in("user_id", userIds)
         : { data: [] };
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+      const profileMap = new Map(
+        (contactRows ?? []).map((c: any) => [
+          c.user_id,
+          {
+            id: c.user_id,
+            full_name: (c.companies as any)?.name
+              ?? [c.first_name, c.last_name].filter(Boolean).join(" ")
+              || null,
+            email: c.email,
+          },
+        ])
+      );
 
       return (data ?? []).map((o: any) => {
         const profile = profileMap.get(o.user_id);

@@ -32,7 +32,9 @@ export interface PipelineOrder {
 
 export interface DeliveryOrder {
   id: string;
-  client_name: string | null;
+  user_id: string | null;
+  client_name: string | null;       // companies.name or contact full_name or email
+  shopify_customer_name: string | null; // shopify_orders.customer_name if no user_id
   delivery_date: string;
   total_kg: number;
   status: OrderStatus;
@@ -267,28 +269,56 @@ export function useDeliveryOrders() {
       const { data, error } = await supabase
         .from("orders")
         .select(`
-          id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
+          id, user_id, delivery_date, total_kg, status, is_roasted, is_packed, is_labeled,
           order_items ( product_name, quantity ),
-          shopify_orders ( shopify_order_number )
+          shopify_orders ( shopify_order_number, customer_name )
         `)
         .eq("status", "ready_for_delivery")
         .order("delivery_date", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((o: any) => ({
-        id: o.id,
-        client_name: null,
-        delivery_date: o.delivery_date,
-        total_kg: Number(o.total_kg),
-        status: normalizeOrderStatus(o.status),
-        is_roasted: Boolean(o.is_roasted),
-        is_packed: Boolean(o.is_packed),
-        is_labeled: Boolean(o.is_labeled),
-        shopify_order_number: o.shopify_orders?.[0]?.shopify_order_number ?? null,
-        items: (o.order_items ?? []).map((i: any) => ({
-          product_name: i.product_name,
-          quantity: Number(i.quantity),
-        })),
-      }));
+
+      // Two-step contacts join (contacts.user_id → companies.name)
+      const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
+      const { data: contactRows } = userIds.length > 0
+        ? await supabase
+            .from("contacts")
+            .select("user_id, first_name, last_name, email, companies(name)")
+            .in("user_id", userIds)
+        : { data: [] };
+      const profileMap = new Map(
+        (contactRows ?? []).map((c: any) => [
+          c.user_id,
+          {
+            id: c.user_id,
+            full_name: (c.companies as any)?.name
+              ?? [c.first_name, c.last_name].filter(Boolean).join(" ")
+              || null,
+            email: c.email,
+          },
+        ])
+      );
+
+      return (data ?? []).map((o: any) => {
+        const profile = profileMap.get(o.user_id);
+        const shopify = o.shopify_orders?.[0];
+        return {
+          id: o.id,
+          user_id: o.user_id ?? null,
+          client_name: profile?.full_name || profile?.email || null,
+          shopify_customer_name: shopify?.customer_name ?? null,
+          delivery_date: o.delivery_date,
+          total_kg: Number(o.total_kg),
+          status: normalizeOrderStatus(o.status),
+          is_roasted: Boolean(o.is_roasted),
+          is_packed: Boolean(o.is_packed),
+          is_labeled: Boolean(o.is_labeled),
+          shopify_order_number: shopify?.shopify_order_number ?? null,
+          items: (o.order_items ?? []).map((i: any) => ({
+            product_name: i.product_name,
+            quantity: Number(i.quantity),
+          })),
+        };
+      });
     },
     ...POLL,
   });
