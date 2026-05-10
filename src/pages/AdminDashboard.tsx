@@ -235,18 +235,32 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       if (error) throw error;
 
-      // Only fetch profiles for orders with a real user_id (internal orders)
+      // Fetch contact + company info for internal orders (orders with user_id)
       const userIds = [...new Set((data ?? []).map((o: any) => o.user_id).filter(Boolean))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+      const { data: contactRows } = userIds.length > 0
+        ? await supabase
+            .from("contacts")
+            .select("user_id, first_name, last_name, email, companies(name)")
+            .in("user_id", userIds)
         : { data: [] };
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+      const profileMap = new Map(
+        (contactRows ?? []).map((c: any) => [
+          c.user_id,
+          {
+            id: c.user_id,
+            full_name: [c.first_name, c.last_name].filter(Boolean).join(" ") || null,
+            company_name: (c.companies as any)?.name ?? null,
+            email: c.email,
+          },
+        ])
+      );
 
       const mapped: AdminOrder[] = ((data ?? []) as any[]).map((o) => {
         const profile = o.user_id ? profileMap.get(o.user_id) : null;
-        // Shopify orders have client_name on the order row; internal orders use profiles
+        // Shopify orders have client_name on the order row; internal orders use contacts→companies
         const resolvedClientName =
           o.client_name ||
+          profile?.company_name ||
           profile?.full_name ||
           profile?.email ||
           null;
@@ -331,9 +345,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   /* HIDDEN — Sellsy — preserved for future use
   const invokeSellsyCreateOrder = useCallback(async (order: AdminOrder) => {
     const { data: clientRow } = await supabase
-      .from("client_onboarding")
+      .from("companies")
       .select("sellsy_client_id")
-      .eq("user_id", order.user_id)
+      .eq("id",
+        (await supabase.from("contacts").select("company_id").eq("user_id", order.user_id).maybeSingle()).data?.company_id ?? ""
+      )
       .maybeSingle();
 
     return supabase.functions.invoke("sellsy-sync", {
@@ -464,9 +480,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
    const deleteClient = async (client: AppClient) => {
      try {
-       const { error } = await supabase.from("client_onboarding").delete().eq("id", client.id);
+       const { error } = await supabase.from("companies").delete().eq("id", client.id);
        if (error) throw error;
-       toast({ title: "Client deleted", description: `"${client.company_name || client.contact_name || "Client"}" has been removed.` });
+       toast({ title: "Client deleted", description: `"${client.name || "Client"}" has been removed.` });
        void loadClients();
      } catch (err) {
        toast({ title: "Delete failed", description: String(err), variant: "destructive" });
@@ -496,9 +512,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setClientError(null);
     try {
       const { data, error } = await supabase
-        .from("client_onboarding")
+        .from("companies")
         .select("*")
-        .order("company_name", { ascending: true });
+        .order("name", { ascending: true });
       if (error) throw new Error(error.message);
       setClients((data as AppClient[]) ?? []);
     } catch (err) {
@@ -1891,7 +1907,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete client?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{clientToDelete?.company_name || clientToDelete?.contact_name || "this client"}". This action cannot be undone.
+              This will permanently delete "{clientToDelete?.name || "this client"}". This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1918,13 +1934,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         open={showCreateOrder}
         onOpenChange={setShowCreateOrder}
         clients={clients.map((c) => ({
-          user_id: c.user_id,
-          company_name: c.company_name ?? null,
-          contact_name: c.contact_name ?? null,
+          id: c.id,
+          name: c.name,
           email: c.email ?? null,
-          custom_company_name: c.custom_company_name ?? null,
+          user_id: null,
           client_data_mode: c.client_data_mode ?? "custom",
-          pricing_tier_id: c.pricing_tier_id ?? null,
+          sellsy_client_id: c.sellsy_client_id ?? null,
         }))}
         products={products.map((p) => ({
           id: p.id,

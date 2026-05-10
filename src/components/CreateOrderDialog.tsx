@@ -19,13 +19,12 @@ import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { DraftBanner } from "@/components/DraftBanner";
 
 export type SimpleClient = {
-  user_id: string;
-  company_name: string | null;
-  contact_name: string | null;
+  id: string;
+  name: string;
   email: string | null;
-  custom_company_name: string | null;
+  user_id: string | null;
   client_data_mode: string;
-  pricing_tier_id: string | null;
+  sellsy_client_id: string | null;
 };
 
 export type SimpleProduct = {
@@ -148,15 +147,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   // Load tier when client changes
   const handleClientChange = useCallback(async (clientId: string) => {
     setForm(p => ({ ...p, selectedClientId: clientId, clientTier: null }));
-    const client = clients.find((c) => c.user_id === clientId);
-    if (client?.pricing_tier_id) {
-      const { data } = await supabase
-        .from("pricing_tiers")
-        .select("name, product_discount_percent, delivery_discount_percent")
-        .eq("id", client.pricing_tier_id)
-        .single();
-      if (data) setForm(p => ({ ...p, clientTier: data as ClientTier }));
-    }
+    // pricing_tier_id no longer on SimpleClient; tier lookup removed
   }, [clients, setForm]);
 
   const handleSave = useCallback(async () => {
@@ -215,8 +206,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
   }, [selectedClientId, deliveryDate, lineItems, totalKg, totalPrice, clientTier, toast, clearDraft, onOpenChange, onCreated]);
 
   const getClientLabel = (c: SimpleClient) => {
-    const name = c.client_data_mode === "custom" && c.custom_company_name
-      ? c.custom_company_name : c.company_name;
+    const name = c.name;
     return name || c.email || (c.user_id ?? "").slice(0, 8) || "Unknown";
   };
 
@@ -246,7 +236,7 @@ export function CreateOrderDialog({ open, onOpenChange, clients, products, onCre
               <SelectTrigger><SelectValue placeholder="Select a client…" /></SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
-                  <SelectItem key={c.user_id} value={c.user_id}>{getClientLabel(c)}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{getClientLabel(c)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
