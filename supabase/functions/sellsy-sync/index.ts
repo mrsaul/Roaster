@@ -803,43 +803,81 @@ async function handleBulkClientSync(user: AuthenticatedUser, accessToken: string
   for (const client of normalizedClients) {
     const address = [client.address, client.city, client.country].filter(Boolean).join(", ") || null;
 
-    // Check if a client_onboarding row already exists with this sellsy_client_id
+    // Check if a company already exists with this sellsy_client_id
     const { data: existing } = await supabase
-      .from("client_onboarding")
+      .from("companies")
       .select("id")
       .eq("sellsy_client_id", client.id)
       .maybeSingle();
 
     if (existing) {
-      // Update Sellsy-sourced fields only
+      // Update Sellsy-sourced fields
       await supabase
-        .from("client_onboarding")
+        .from("companies")
         .update({
-          company_name: client.name,
-          contact_name: client.name,
+          name: client.name,
           email: client.email,
           phone: client.phone,
-          delivery_address: address,
           last_synced_at: now,
         })
         .eq("id", existing.id);
+
+      // Update delivery address
+      if (address) {
+        const { data: existingAddr } = await supabase
+          .from("company_addresses")
+          .select("id")
+          .eq("company_id", existing.id)
+          .eq("label", "Delivery")
+          .maybeSingle();
+
+        if (existingAddr) {
+          await supabase.from("company_addresses")
+            .update({ address_line1: address })
+            .eq("id", existingAddr.id);
+        } else {
+          await supabase.from("company_addresses").insert({
+            company_id: existing.id,
+            label: "Delivery",
+            address_line1: address,
+          });
+        }
+      }
     } else {
-      // Insert new client_onboarding row linked to a placeholder user_id
-      // We use a deterministic UUID from the sellsy ID so it can be linked later
-      await supabase
-        .from("client_onboarding")
+      // Insert new company
+      const { data: newCompany } = await supabase
+        .from("companies")
         .insert({
-          user_id: user.userId,
-          sellsy_client_id: client.id,
-          company_name: client.name,
-          contact_name: client.name,
+          name: client.name,
           email: client.email,
           phone: client.phone,
-          delivery_address: address,
+          sellsy_client_id: client.id,
+          sellsy_id: client.id,
           client_data_mode: "sellsy",
           onboarding_status: "completed",
           last_synced_at: now,
+        })
+        .select("id")
+        .single();
+
+      if (newCompany && address) {
+        await supabase.from("company_addresses").insert({
+          company_id: newCompany.id,
+          label: "Delivery",
+          address_line1: address,
         });
+      }
+
+      // Create a placeholder primary contact (no user_id — not yet linked to auth)
+      if (newCompany) {
+        await supabase.from("contacts").insert({
+          company_id: newCompany.id,
+          last_name: client.name,
+          email: client.email,
+          phone: client.phone,
+          is_primary: true,
+        });
+      }
     }
     syncedCount++;
   }
@@ -890,21 +928,27 @@ async function handleClientSync(user: AuthenticatedUser, accessToken: string, bo
   const now = new Date().toISOString();
 
   const supabase = createServiceSupabaseClient();
+  // Update the company (clientOnboardingId is the company UUID — same UUID was kept during migration)
   const { error } = await supabase
-    .from("client_onboarding")
+    .from("companies")
     .update({
-      company_name: normalized.name,
-      contact_name: normalized.name,
+      name: normalized.name,
       email: normalized.email,
       phone: normalized.phone,
-      delivery_address: [normalized.address, normalized.city, normalized.country].filter(Boolean).join(", ") || null,
       last_synced_at: now,
     })
     .eq("id", clientOnboardingId);
 
   if (error) {
-    throw new Error(`Failed to update client: ${error.message}`);
+    throw new Error(`Failed to update company: ${error.message}`);
   }
+
+  // Also update primary contact's email/phone
+  await supabase
+    .from("contacts")
+    .update({ email: normalized.email, phone: normalized.phone })
+    .eq("company_id", clientOnboardingId)
+    .eq("is_primary", true);
 
   return jsonResponse({
     success: true,
