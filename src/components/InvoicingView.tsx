@@ -1,555 +1,708 @@
-import { useState, useMemo } from "react";
-import {
-  Send, RefreshCw, ExternalLink, AlertCircle, CheckCircle2, Search, X, Filter, AlertTriangle,
-  Sheet,
-} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
-import { format, parseISO } from "date-fns";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { format, parseISO, addDays } from "date-fns";
+import { Search, Send, ChevronDown, Loader2, X, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { ORDER_STATUS_CLASS, ORDER_STATUS_LABEL, type OrderStatus } from "@/lib/orderStatuses";
 
-/* ─── Types ─── */
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export type InvoicingStatus = "not_sent" | "sent" | "error";
+export type InvoicingStatus = "not_sent" | "draft" | "sent" | "paid" | "error";
 
-export interface InvoicingOrder {
+type ProductInfo = {
+  sellsy_id: string | null;
+  sellsy_tax_id: string | null;
+  sellsy_tax_rate: number | null;
+  name: string | null;
+};
+
+type OrderItem = {
+  id: string;
+  product_name: string | null;
+  quantity: number;
+  price_per_kg: number;
+  products: ProductInfo | null;
+};
+
+export type InvoicingOrder = {
   id: string;
   user_id: string;
-  client_name: string | null;
-  user_email: string | null;
-  delivery_date: string;
-  total_kg: number;
+  created_at: string;
+  delivery_date: string | null;
   total_price: number;
-  status: OrderStatus;
-  sellsy_id: string | null;
-  invoicing_status: InvoicingStatus;
-  last_invoice_sync: string | null;
-  has_sellsy_client_id: boolean;
-  items: { product_name: string; quantity: number; price_per_kg: number }[];
-}
+  status: string;
+  sellsy_invoice_id: string | null;
+  sellsy_invoice_status: InvoicingStatus;
+  sellsy_invoice_error: string | null;
+  invoiced_at: string | null;
+  order_items: OrderItem[];
+  // From contacts → companies join
+  company_name: string | null;
+  company_sellsy_id: string | null;
+  contact_sellsy_id: string | null;
+};
 
 interface InvoicingViewProps {
-  orders: InvoicingOrder[];
-  onSendToSellsy: (orderId: string) => Promise<void>;
-  onBulkSendToSellsy: (orderIds: string[]) => Promise<void>;
-  sendingIds: Set<string>;
+  onBadgeCount?: (n: number) => void;
 }
 
-const INVOICING_STATUS_LABEL: Record<InvoicingStatus, string> = {
-  not_sent: "Not Sent",
-  sent: "Sent to Sellsy",
-  error: "Error",
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const INVOICING_STATUS_CLASS: Record<InvoicingStatus, string> = {
-  not_sent: "bg-warning/10 text-warning border-warning/20",
-  sent: "bg-success/10 text-success border-success/20",
-  error: "bg-destructive/10 text-destructive border-destructive/20",
-};
+function formatDate(val: string | null): string {
+  if (!val) return "—";
+  try { return format(parseISO(val), "MMM d, yyyy"); } catch { return "—"; }
+}
 
-/* ─── Component ─── */
+function defaultDueDate(): string {
+  return format(addDays(new Date(), 30), "yyyy-MM-dd");
+}
 
-export function InvoicingView({ orders, onSendToSellsy, onBulkSendToSellsy, sendingIds }: InvoicingViewProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [invoicingFilter, setInvoicingFilter] = useState<string>("all");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [detailOrder, setDetailOrder] = useState<InvoicingOrder | null>(null);
-  const [bulkSending, setBulkSending] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-  const [sheetIdInput, setSheetIdInput] = useState("");
-  const { toast } = useToast();
-
-  // Extract spreadsheet ID from a Google Sheets URL or plain ID
-  const parseSheetId = (input: string): string | null => {
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-    // Full URL: https://docs.google.com/spreadsheets/d/SHEET_ID/edit...
-    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) return match[1];
-    // Plain ID (no slashes)
-    if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
-    return null;
+function statusBadge(status: InvoicingStatus, errorMsg?: string | null) {
+  const configs: Record<InvoicingStatus, { label: string; className: string }> = {
+    not_sent: { label: "Not sent",  className: "bg-gray-100 text-gray-600 border-gray-200" },
+    draft:    { label: "Draft",     className: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+    sent:     { label: "Sent",      className: "bg-blue-100 text-blue-700 border-blue-200" },
+    paid:     { label: "Paid",      className: "bg-green-100 text-green-700 border-green-200" },
+    error:    { label: "Error",     className: "bg-red-100 text-red-700 border-red-200" },
   };
-
-  const handleExportToSheets = async (testMode = false) => {
-    const spreadsheetId = parseSheetId(sheetIdInput) ?? undefined;
-    setExporting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("export-invoicing-sheet", {
-        body: { test: testMode, spreadsheet_id: spreadsheetId },
-      });
-
-      // Extract the real error message from the function response body
-      if (error) {
-        let detail = error.message;
-        try {
-          // FunctionsHttpError carries the response body in error.context
-          const body = await (error as any).context?.json?.();
-          if (body?.error) detail = body.error;
-        } catch {
-          // ignore — use the original error.message
-        }
-        throw new Error(detail);
-      }
-
-      const result = data as { url: string; orders_exported: number; month: string };
-      setSheetUrl(result.url);
-      toast({
-        title: "Exported to Google Sheets",
-        description: `${result.orders_exported} orders exported for ${result.month}.`,
-      });
-    } catch (err) {
-      toast({
-        title: "Export failed",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  // Filter orders to invoicing-eligible statuses
-  const eligibleOrders = useMemo(() =>
-    orders.filter((o) => ["ready_for_delivery", "delivered"].includes(o.status)),
-    [orders],
+  const cfg = configs[status] ?? configs.not_sent;
+  return (
+    <span title={status === "error" && errorMsg ? errorMsg : undefined}>
+      <Badge variant="outline" className={`text-xs ${cfg.className}`}>{cfg.label}</Badge>
+    </span>
   );
+}
 
-  const filteredOrders = useMemo(() => {
-    let result = eligibleOrders;
-    if (invoicingFilter !== "all") {
-      result = result.filter((o) => o.invoicing_status === invoicingFilter);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (o) =>
-          o.id.toLowerCase().includes(q) ||
-          (o.client_name ?? "").toLowerCase().includes(q) ||
-          (o.user_email ?? "").toLowerCase().includes(q) ||
-          (o.sellsy_id ?? "").toLowerCase().includes(q),
-      );
-    }
-    return result;
-  }, [eligibleOrders, invoicingFilter, searchQuery]);
+// ─── VAT calculation helpers ──────────────────────────────────────────────────
 
-  const stats = useMemo(() => ({
-    total: eligibleOrders.length,
-    notSent: eligibleOrders.filter((o) => o.invoicing_status === "not_sent").length,
-    sent: eligibleOrders.filter((o) => o.invoicing_status === "sent").length,
-    error: eligibleOrders.filter((o) => o.invoicing_status === "error").length,
-  }), [eligibleOrders]);
+type VatGroup = { rate: number | null; amount: number };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+function computeTotals(items: OrderItem[]): {
+  subtotalHT: number;
+  vatGroups: VatGroup[];
+  totalTTC: number;
+} {
+  const subtotalHT = items.reduce((s, i) => s + i.quantity * i.price_per_kg, 0);
+  const vatMap = new Map<number | null, number>();
+  for (const item of items) {
+    const rate = item.products?.sellsy_tax_rate ?? null;
+    const lineHT = item.quantity * item.price_per_kg;
+    const vatAmount = rate != null ? lineHT * (rate / 100) : 0;
+    vatMap.set(rate, (vatMap.get(rate) ?? 0) + vatAmount);
+  }
+  const vatGroups: VatGroup[] = Array.from(vatMap.entries()).map(([rate, amount]) => ({ rate, amount }));
+  const totalVat = vatGroups.reduce((s, g) => s + g.amount, 0);
+  return { subtotalHT, vatGroups, totalTTC: subtotalHT + totalVat };
+}
 
-  const toggleSelectAll = () => {
-    const selectable = filteredOrders.filter((o) => o.invoicing_status !== "sent");
-    if (selectedIds.size === selectable.length && selectable.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(selectable.map((o) => o.id)));
-    }
-  };
+// ─── PreviewModal ─────────────────────────────────────────────────────────────
 
-  const handleBulkSend = async () => {
-    if (selectedIds.size === 0) return;
-    setBulkSending(true);
-    try {
-      await onBulkSendToSellsy(Array.from(selectedIds));
-      setSelectedIds(new Set());
-    } finally {
-      setBulkSending(false);
-    }
-  };
+interface PreviewModalProps {
+  order: InvoicingOrder;
+  onClose: () => void;
+  onSend: (orderId: string, subject: string, note: string, dueDate: string) => Promise<void>;
+  sending: boolean;
+}
 
-  const selectableCount = filteredOrders.filter((o) => o.invoicing_status !== "sent").length;
+function PreviewModal({ order, onClose, onSend, sending }: PreviewModalProps) {
+  const [subject, setSubject] = useState(`Order #${order.id.slice(0, 8)}`);
+  const [note, setNote] = useState("");
+  const [dueDate, setDueDate] = useState(defaultDueDate());
+
+  const { subtotalHT, vatGroups, totalTTC } = computeTotals(order.order_items);
+  const hasNoSellsyCompany = !order.company_sellsy_id;
 
   return (
-    <>
-      <section className="space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Total invoiceable</p>
-            <p className="text-2xl font-medium tabular-nums text-foreground">{stats.total}</p>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Not sent</p>
-            <p className={cn("text-2xl font-medium tabular-nums", stats.notSent > 0 ? "text-warning" : "text-foreground")}>{stats.notSent}</p>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Sent</p>
-            <p className="text-2xl font-medium tabular-nums text-success">{stats.sent}</p>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <p className="text-xs text-muted-foreground mb-2">Errors</p>
-            <p className={cn("text-2xl font-medium tabular-nums", stats.error > 0 ? "text-destructive" : "text-foreground")}>{stats.error}</p>
-          </div>
-        </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Invoice Preview — Order #{order.id.slice(0, 8)}</DialogTitle>
+        </DialogHeader>
 
-        {/* Google Sheets connect banner — shown until a sheet URL is returned */}
-        {!sheetUrl && (
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex items-start gap-3">
-              <Sheet className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground mb-1">Connect a Google Sheet</p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Create a Google Sheet in your Drive, share it with the service account as <strong>Editor</strong>, then paste the URL below.
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="https://docs.google.com/spreadsheets/d/…"
-                    value={sheetIdInput}
-                    onChange={(e) => setSheetIdInput(e.target.value)}
-                    className="text-sm flex-1"
-                  />
-                  {sheetIdInput && !parseSheetId(sheetIdInput) && (
-                    <p className="text-xs text-destructive self-center whitespace-nowrap">Invalid URL</p>
-                  )}
-                </div>
-                {parseSheetId(sheetIdInput) && (
-                  <p className="text-xs text-green-600 mt-1.5">✓ Sheet ID detected: {parseSheetId(sheetIdInput)}</p>
-                )}
-              </div>
-            </div>
+        {hasNoSellsyCompany && (
+          <div className="flex items-start gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>This company has no Sellsy ID. Sync the client with Sellsy before sending an invoice.</span>
           </div>
         )}
 
-        {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-2 items-center flex-wrap">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search orders…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-56"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                </button>
-              )}
-            </div>
-            <Select value={invoicingFilter} onValueChange={setInvoicingFilter}>
-              <SelectTrigger className="w-48">
-                <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Filter status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="not_sent">Not Sent</SelectItem>
-                <SelectItem value="sent">Sent to Sellsy</SelectItem>
-                <SelectItem value="error">Error</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Export to Google Sheets */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={exporting}
-              onClick={() => void handleExportToSheets(false)}
-            >
-              {exporting
-                ? <RefreshCw className="w-4 h-4 animate-spin" />
-                : <Sheet className="w-4 h-4 text-green-600" />}
-              {exporting ? "Exporting…" : "Export to Sheets"}
-            </Button>
-
-            {/* Test mode — all statuses, for verifying Google credentials */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-muted-foreground text-xs"
-              disabled={exporting}
-              onClick={() => void handleExportToSheets(true)}
-            >
-              {exporting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sheet className="w-3 h-3" />}
-              Test export
-            </Button>
-
-            {/* Link to last exported sheet */}
-            {sheetUrl && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-green-600 hover:text-green-700" asChild>
-                <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Open Sheet
-                </a>
-              </Button>
-            )}
-
-            {selectedIds.size > 0 && (
-              <Button
-                size="sm"
-                className="gap-2"
-                disabled={bulkSending}
-                onClick={() => void handleBulkSend()}
-              >
-                {bulkSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Send selected ({selectedIds.size})
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={selectableCount > 0 && selectedIds.size === selectableCount}
-                      onCheckedChange={toggleSelectAll}
-                      disabled={selectableCount === 0}
-                    />
-                  </TableHead>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Delivery Date</TableHead>
-                  <TableHead className="text-right">Total (€)</TableHead>
-                  <TableHead>Order Status</TableHead>
-                  <TableHead>Invoice Status</TableHead>
-                  <TableHead>Sellsy ID</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                      No invoiceable orders found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const isSent = order.invoicing_status === "sent";
-                    const isSending = sendingIds.has(order.id);
-                    return (
-                      <TableRow
-                        key={order.id}
-                        className={cn(
-                          "cursor-pointer transition-colors",
-                          order.invoicing_status === "not_sent" && "bg-warning/[0.03]",
-                          order.invoicing_status === "error" && "bg-destructive/[0.03]",
-                        )}
-                        onClick={() => setDetailOrder(order)}
-                      >
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={selectedIds.has(order.id)}
-                            onCheckedChange={() => toggleSelect(order.id)}
-                            disabled={isSent}
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-foreground">{order.id.slice(0, 8)}</TableCell>
-                        <TableCell className="text-foreground text-sm">
-                          <span className="flex items-center gap-1.5">
-                            {order.client_name || order.user_email || "—"}
-                            {!order.has_sellsy_client_id && (
-                              <span title="No Sellsy Client ID — cannot invoice">
-                                <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
-                              </span>
-                            )}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{format(parseISO(order.delivery_date), "MMM d, yyyy")}</TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground font-medium">€{order.total_price.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", ORDER_STATUS_CLASS[order.status])}>
-                            {ORDER_STATUS_LABEL[order.status]}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", INVOICING_STATUS_CLASS[order.invoicing_status])}>
-                            {order.invoicing_status === "sent" && <CheckCircle2 className="w-3 h-3" />}
-                            {order.invoicing_status === "error" && <AlertCircle className="w-3 h-3" />}
-                            {INVOICING_STATUS_LABEL[order.invoicing_status]}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{order.sellsy_id || "—"}</TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          {isSent ? (
-                            order.sellsy_id && (
-                              <Button variant="ghost" size="sm" className="gap-1.5 text-xs" asChild>
-                                <a href={`https://app.sellsy.com`} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="w-3.5 h-3.5" /> Open
-                                </a>
-                              </Button>
-                            )
-                          ) : !order.has_sellsy_client_id ? (
-                            <span className="text-xs text-warning flex items-center gap-1" title="Assign a Sellsy Client ID to this client first">
-                              <AlertTriangle className="w-3.5 h-3.5" /> No Sellsy ID
-                            </span>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant={order.invoicing_status === "error" ? "destructive" : "default"}
-                              className="gap-1.5"
-                              disabled={isSending}
-                              onClick={() => void onSendToSellsy(order.id)}
-                            >
-                              {isSending ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Send className="w-3.5 h-3.5" />
-                              )}
-                              {order.invoicing_status === "error" ? "Retry" : "Send"}
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      </section>
-
-      {/* Detail dialog */}
-      <Dialog open={Boolean(detailOrder)} onOpenChange={(open) => !open && setDetailOrder(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              Invoice — {detailOrder?.id.slice(0, 8)}
-              {detailOrder && (
-                <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", INVOICING_STATUS_CLASS[detailOrder.invoicing_status])}>
-                  {INVOICING_STATUS_LABEL[detailOrder.invoicing_status]}
-                </span>
-              )}
-            </DialogTitle>
-            <DialogDescription>Order invoicing details and actions.</DialogDescription>
-          </DialogHeader>
-
-          {detailOrder && (
-            <div className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Client</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{detailOrder.client_name || detailOrder.user_email || "Unknown"}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Delivery date</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{format(parseISO(detailOrder.delivery_date), "EEEE d MMMM yyyy")}</p>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Order status</p>
-                  <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium mt-1", ORDER_STATUS_CLASS[detailOrder.status])}>
-                    {ORDER_STATUS_LABEL[detailOrder.status]}
-                  </span>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Sellsy Invoice ID</p>
-                  <p className="mt-1 text-sm font-mono text-foreground">{detailOrder.sellsy_id || "—"}</p>
-                </div>
-                {detailOrder.last_invoice_sync && (
-                  <div className="rounded-lg bg-muted/40 p-3 sm:col-span-2">
-                    <p className="text-xs text-muted-foreground">Last sync</p>
-                    <p className="mt-1 text-sm text-foreground">{format(parseISO(detailOrder.last_invoice_sync), "MMM d, yyyy HH:mm")}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Items */}
-              <div className="rounded-lg border border-border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty (kg)</TableHead>
-                      <TableHead className="text-right">€/kg</TableHead>
-                      <TableHead className="text-right">Subtotal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detailOrder.items.map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium text-foreground">{item.product_name}</TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground">{item.quantity}</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">€{item.price_per_kg.toFixed(2)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-foreground font-medium">€{(item.quantity * item.price_per_kg).toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-sm text-muted-foreground">{detailOrder.total_kg.toFixed(0)} kg total</span>
-                <span className="text-lg font-semibold tabular-nums text-foreground">€{detailOrder.total_price.toFixed(2)}</span>
-              </div>
-
-              {/* Missing Sellsy ID warning */}
-              {!detailOrder.has_sellsy_client_id && (
-                <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
-                  <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                  <p className="text-sm text-warning">This client has no Sellsy Client ID. Assign one in the Clients section before invoicing.</p>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2">
-                {detailOrder.sellsy_id && (
-                  <Button variant="outline" className="gap-2" asChild>
-                    <a href="https://app.sellsy.com" target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-4 h-4" /> Open in Sellsy
-                    </a>
-                  </Button>
-                )}
-                {detailOrder.invoicing_status !== "sent" && detailOrder.has_sellsy_client_id && (
-                  <Button
-                    className="gap-2"
-                    variant={detailOrder.invoicing_status === "error" ? "destructive" : "default"}
-                    disabled={sendingIds.has(detailOrder.id)}
-                    onClick={() => {
-                      void onSendToSellsy(detailOrder.id);
-                      setDetailOrder(null);
-                    }}
-                  >
-                    {sendingIds.has(detailOrder.id) ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                    {detailOrder.invoicing_status === "error" ? "Retry Send" : "Send to Sellsy"}
-                  </Button>
-                )}
-              </div>
-            </div>
+        {/* Client block */}
+        <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1">
+          <p className="font-medium">{order.company_name ?? "Unknown company"}</p>
+          {order.company_sellsy_id && (
+            <p className="text-xs text-muted-foreground">Sellsy company ID: {order.company_sellsy_id}</p>
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+
+        {/* Editable fields */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Subject</label>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Note (optional)</label>
+            <textarea
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[72px] resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Internal note for this invoice..."
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Due date</label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-48" />
+          </div>
+        </div>
+
+        {/* Line items */}
+        <div className="rounded-md border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Product</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Qty (kg)</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Unit HT</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">VAT</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Line HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.order_items.map((item) => {
+                const lineHT = item.quantity * item.price_per_kg;
+                const taxRate = item.products?.sellsy_tax_rate;
+                return (
+                  <tr key={item.id} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      {item.product_name ?? "—"}
+                      {!item.products?.sellsy_id && (
+                        <span className="ml-1 text-xs text-muted-foreground">(no Sellsy item)</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{item.quantity}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">€{item.price_per_kg.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {taxRate != null ? `${taxRate}%` : <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">€{lineHT.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="space-y-1 text-sm border-t border-border pt-3">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal HT</span>
+            <span className="tabular-nums font-medium">€{subtotalHT.toFixed(2)}</span>
+          </div>
+          {vatGroups.map((g) => (
+            <div key={String(g.rate)} className="flex justify-between text-muted-foreground">
+              <span>VAT {g.rate != null ? `${g.rate}%` : "(unknown rate)"}</span>
+              <span className="tabular-nums">€{g.amount.toFixed(2)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+            <span>Total TTC</span>
+            <span className="tabular-nums">€{totalTTC.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={sending}>Cancel</Button>
+          <Button
+            onClick={() => void onSend(order.id, subject, note, dueDate)}
+            disabled={hasNoSellsyCompany || sending}
+          >
+            {sending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>
+            ) : (
+              <><Send className="mr-2 h-4 w-4" /> Send Draft to Sellsy</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+// ─── BulkResultDialog ─────────────────────────────────────────────────────────
+
+interface BulkResult {
+  succeeded: number;
+  failed: { orderId: string; error: string }[];
+}
+
+function BulkResultDialog({ result, onClose }: { result: BulkResult; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Bulk send complete</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-2 text-green-700">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>{result.succeeded} invoice{result.succeeded !== 1 ? "s" : ""} created as draft</span>
+          </div>
+          {result.failed.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-medium text-destructive">{result.failed.length} failed:</p>
+              {result.failed.map((f) => (
+                <p key={f.orderId} className="text-xs text-muted-foreground pl-2">
+                  #{f.orderId.slice(0, 8)}: {f.error}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main InvoicingView ───────────────────────────────────────────────────────
+
+export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
+  const { toast } = useToast();
+
+  // Data
+  const [orders, setOrders] = useState<InvoicingOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<InvoicingStatus | "all">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // UI state
+  const [previewOrder, setPreviewOrder] = useState<InvoicingOrder | null>(null);
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: orderRows, error: ordersErr } = await supabase
+        .from("orders")
+        .select(`
+          id, user_id, created_at, delivery_date, total_price, status,
+          sellsy_invoice_id, sellsy_invoice_status, sellsy_invoice_error, invoiced_at,
+          order_items (
+            id, product_name, quantity, price_per_kg,
+            products ( sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+          )
+        `)
+        .eq("status", "delivered")
+        .order("delivery_date", { ascending: false });
+
+      if (ordersErr) throw ordersErr;
+
+      const userIds = [...new Set((orderRows ?? []).map((o: any) => o.user_id).filter(Boolean))];
+
+      const contactMap: Map<string, { company_name: string | null; company_sellsy_id: string | null; contact_sellsy_id: string | null }> = new Map();
+
+      if (userIds.length > 0) {
+        const { data: contactRows, error: contactsErr } = await supabase
+          .from("contacts")
+          .select("user_id, sellsy_contact_id, companies ( name, sellsy_id )")
+          .in("user_id", userIds);
+
+        if (contactsErr) throw contactsErr;
+
+        for (const row of contactRows ?? []) {
+          const co = (row as any).companies as { name: string | null; sellsy_id: string | null } | null;
+          contactMap.set(row.user_id, {
+            company_name: co?.name ?? null,
+            company_sellsy_id: co?.sellsy_id ?? null,
+            contact_sellsy_id: (row as any).sellsy_contact_id ?? null,
+          });
+        }
+      }
+
+      const mapped: InvoicingOrder[] = (orderRows ?? []).map((o: any) => {
+        const contact = contactMap.get(o.user_id) ?? { company_name: null, company_sellsy_id: null, contact_sellsy_id: null };
+        return {
+          id: o.id,
+          user_id: o.user_id,
+          created_at: o.created_at,
+          delivery_date: o.delivery_date,
+          total_price: Number(o.total_price),
+          status: o.status,
+          sellsy_invoice_id: o.sellsy_invoice_id ?? null,
+          sellsy_invoice_status: (o.sellsy_invoice_status ?? "not_sent") as InvoicingStatus,
+          sellsy_invoice_error: o.sellsy_invoice_error ?? null,
+          invoiced_at: o.invoiced_at ?? null,
+          order_items: (o.order_items ?? []).map((i: any) => ({
+            id: i.id,
+            product_name: i.product_name ?? null,
+            quantity: Number(i.quantity),
+            price_per_kg: Number(i.price_per_kg),
+            products: i.products ? {
+              sellsy_id: i.products.sellsy_id ?? null,
+              sellsy_tax_id: i.products.sellsy_tax_id ?? null,
+              sellsy_tax_rate: i.products.sellsy_tax_rate != null ? Number(i.products.sellsy_tax_rate) : null,
+              name: i.products.name ?? null,
+            } : null,
+          })),
+          company_name: contact.company_name,
+          company_sellsy_id: contact.company_sellsy_id,
+          contact_sellsy_id: contact.contact_sellsy_id,
+        };
+      });
+
+      setOrders(mapped);
+
+      // Update badge count
+      const notSentCount = mapped.filter((o) => o.sellsy_invoice_status === "not_sent").length;
+      onBadgeCount?.(notSentCount);
+    } catch (err) {
+      toast({ title: "Failed to load orders", description: String(err), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, onBadgeCount]);
+
+  useEffect(() => { void loadOrders(); }, [loadOrders]);
+
+  // ── Send invoice (single) ─────────────────────────────────────────────────
+
+  const sendInvoice = useCallback(async (
+    orderId: string,
+    subject: string,
+    note: string,
+    dueDate: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    setSendingIds((prev) => new Set([...prev, orderId]));
+    try {
+      const { data, error } = await supabase.functions.invoke("sellsy-sync", {
+        body: { mode: "create-invoice", order_id: orderId, subject, note, due_date: dueDate },
+      });
+
+      if (error || !data?.success) {
+        const msg = data?.error ?? error?.message ?? "Unknown error";
+        await supabase.from("orders").update({
+          sellsy_invoice_status: "error",
+          sellsy_invoice_error: msg,
+        }).eq("id", orderId);
+        setOrders((prev) => prev.map((o) => o.id === orderId
+          ? { ...o, sellsy_invoice_status: "error", sellsy_invoice_error: msg }
+          : o));
+        return { success: false, error: msg };
+      }
+
+      setOrders((prev) => prev.map((o) => o.id === orderId
+        ? { ...o, sellsy_invoice_status: "draft", sellsy_invoice_id: data.invoice_id, invoiced_at: new Date().toISOString() }
+        : o));
+      onBadgeCount?.(orders.filter((o) => o.id !== orderId && o.sellsy_invoice_status === "not_sent").length);
+      return { success: true };
+    } finally {
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(orderId); return s; });
+    }
+  }, [orders, onBadgeCount]);
+
+  // ── Send + close modal ────────────────────────────────────────────────────
+
+  const handleModalSend = useCallback(async (
+    orderId: string, subject: string, note: string, dueDate: string,
+  ) => {
+    const result = await sendInvoice(orderId, subject, note, dueDate);
+    if (result.success) {
+      toast({ title: "Invoice created as draft in Sellsy" });
+      setPreviewOrder(null);
+    } else {
+      toast({ title: "Failed to create invoice", description: result.error, variant: "destructive" });
+    }
+  }, [sendInvoice, toast]);
+
+  // ── Bulk send ─────────────────────────────────────────────────────────────
+
+  const handleBulkSend = useCallback(async () => {
+    const toSend = orders.filter(
+      (o) => selected.has(o.id) && !["draft", "sent", "paid"].includes(o.sellsy_invoice_status),
+    );
+    if (toSend.length === 0) return;
+
+    setBulkProgress({ current: 0, total: toSend.length });
+    const result: BulkResult = { succeeded: 0, failed: [] };
+
+    for (let i = 0; i < toSend.length; i++) {
+      const order = toSend[i];
+      setBulkProgress({ current: i + 1, total: toSend.length });
+      const subject = `Order #${order.id.slice(0, 8)}`;
+      const res = await sendInvoice(order.id, subject, "", defaultDueDate());
+      if (res.success) {
+        result.succeeded++;
+      } else {
+        result.failed.push({ orderId: order.id, error: res.error ?? "Unknown error" });
+      }
+      if (i < toSend.length - 1) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    setBulkProgress(null);
+    setBulkResult(result);
+    setSelected(new Set());
+  }, [orders, selected, sendInvoice]);
+
+  // ── Manual status update ──────────────────────────────────────────────────
+
+  const updateStatus = useCallback(async (orderId: string, newStatus: InvoicingStatus) => {
+    const { error } = await supabase.from("orders")
+      .update({ sellsy_invoice_status: newStatus })
+      .eq("id", orderId);
+    if (error) {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, sellsy_invoice_status: newStatus } : o));
+  }, [toast]);
+
+  // ── Filtered orders ───────────────────────────────────────────────────────
+
+  const filtered = orders.filter((o) => {
+    if (statusFilter !== "all" && o.sellsy_invoice_status !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const matchesId = o.id.toLowerCase().includes(q);
+      const matchesClient = (o.company_name ?? "").toLowerCase().includes(q);
+      if (!matchesId && !matchesClient) return false;
+    }
+    if (dateFrom && o.delivery_date && o.delivery_date < dateFrom) return false;
+    if (dateTo && o.delivery_date && o.delivery_date > dateTo) return false;
+    return true;
+  });
+
+  const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.id));
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected((prev) => { const s = new Set(prev); filtered.forEach((o) => s.delete(o.id)); return s; });
+    } else {
+      setSelected((prev) => new Set([...prev, ...filtered.map((o) => o.id)]));
+    }
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+
+  const selectedCount = [...selected].filter((id) => filtered.some((o) => o.id === id)).length;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Invoicing</h2>
+        <div className="flex items-center gap-2">
+          {bulkProgress && (
+            <span className="text-sm text-muted-foreground">
+              Sending {bulkProgress.current}/{bulkProgress.total} invoices…
+            </span>
+          )}
+          {selectedCount > 0 && !bulkProgress && (
+            <Button size="sm" onClick={() => void handleBulkSend()} disabled={Boolean(bulkProgress)}>
+              <Send className="mr-2 h-4 w-4" />
+              Send selected ({selectedCount})
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8 w-56"
+            placeholder="Search order # or client…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="absolute right-2.5 top-2.5" onClick={() => setSearch("")}>
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as InvoicingStatus | "all")}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="not_sent">Not sent</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          type="date"
+          className="w-36"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          placeholder="From"
+        />
+        <Input
+          type="date"
+          className="w-36"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          placeholder="To"
+        />
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading orders…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">No delivered orders found.</div>
+      ) : (
+        <div className="rounded-md border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/60 border-b border-border">
+              <tr>
+                <th className="px-3 py-2 text-left w-8">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="rounded"
+                  />
+                </th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Order #</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Delivery date</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Client</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Products</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Total HT</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Status</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((order) => {
+                const isSending = sendingIds.has(order.id);
+                const isAlreadySent = ["draft", "sent", "paid"].includes(order.sellsy_invoice_status);
+                const productNames = order.order_items
+                  .map((i) => i.product_name ?? "—")
+                  .join(", ");
+
+                return (
+                  <tr key={order.id} className="border-t border-border hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(order.id)}
+                        onChange={() => toggleOne(order.id)}
+                        className="rounded"
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{order.id.slice(0, 8)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(order.delivery_date)}</td>
+                    <td className="px-3 py-2">{order.company_name ?? <span className="text-muted-foreground">—</span>}</td>
+                    <td className="px-3 py-2 max-w-[200px] truncate" title={productNames}>{productNames}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">€{order.total_price.toFixed(2)}</td>
+                    <td className="px-3 py-2">
+                      {statusBadge(order.sellsy_invoice_status, order.sellsy_invoice_error)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        {/* Preview / Send button */}
+                        <Button
+                          size="sm"
+                          variant={isAlreadySent ? "outline" : "default"}
+                          className="h-7 text-xs"
+                          onClick={() => setPreviewOrder(order)}
+                          disabled={isSending}
+                        >
+                          {isSending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            isAlreadySent ? "Preview" : "Preview / Send"
+                          )}
+                        </Button>
+
+                        {/* Manual status dropdown */}
+                        {(order.sellsy_invoice_status === "draft" || order.sellsy_invoice_status === "sent") && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="outline" className="h-7 w-7 p-0">
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {order.sellsy_invoice_status === "draft" && (
+                                <DropdownMenuItem onClick={() => void updateStatus(order.id, "sent")}>
+                                  Mark as Sent
+                                </DropdownMenuItem>
+                              )}
+                              {order.sellsy_invoice_status === "sent" && (
+                                <DropdownMenuItem onClick={() => void updateStatus(order.id, "paid")}>
+                                  Mark as Paid
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Preview modal */}
+      {previewOrder && (
+        <PreviewModal
+          order={previewOrder}
+          onClose={() => setPreviewOrder(null)}
+          onSend={handleModalSend}
+          sending={sendingIds.has(previewOrder.id)}
+        />
+      )}
+
+      {/* Bulk result dialog */}
+      {bulkResult && (
+        <BulkResultDialog
+          result={bulkResult}
+          onClose={() => setBulkResult(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+export default InvoicingView;
