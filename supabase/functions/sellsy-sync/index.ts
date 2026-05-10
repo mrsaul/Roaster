@@ -1066,6 +1066,155 @@ async function handleHealthCheck(user: AuthenticatedUser) {
   }, allOk ? 200 : 503);
 }
 
+async function handleCreateInvoice(
+  supabaseClient: ReturnType<typeof createClient>,
+  body: JsonRecord,
+): Promise<Response> {
+  const orderId = typeof body.order_id === "string" ? body.order_id : null;
+  const note = typeof body.note === "string" ? body.note : "";
+  const subject = typeof body.subject === "string" ? body.subject : `Order #${String(orderId ?? "").slice(0, 8)}`;
+  const dueDate = typeof body.due_date === "string" ? body.due_date : null;
+
+  if (!orderId) {
+    return new Response(JSON.stringify({ success: false, error: "order_id is required" }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // 1. Load order + order_items + products
+  const { data: order, error: orderErr } = await supabaseClient
+    .from("orders")
+    .select(`
+      id, user_id, created_at, total_price,
+      order_items (
+        id, product_name, quantity, price_per_kg,
+        products ( sellsy_id, sellsy_tax_id, sellsy_tax_rate, name )
+      )
+    `)
+    .eq("id", orderId)
+    .single();
+
+  if (orderErr || !order) {
+    return new Response(JSON.stringify({ success: false, error: orderErr?.message ?? "Order not found" }), {
+      status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. Load company + contact via user_id
+  const { data: contactRow, error: contactErr } = await supabaseClient
+    .from("contacts")
+    .select("sellsy_contact_id, companies ( sellsy_id )")
+    .eq("user_id", order.user_id)
+    .maybeSingle();
+
+  if (contactErr) {
+    return new Response(JSON.stringify({ success: false, error: contactErr.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const companySellsyId = (contactRow?.companies as JsonRecord | null)?.sellsy_id;
+  const contactSellsyId = contactRow?.sellsy_contact_id ?? null;
+
+  if (!companySellsyId) {
+    return new Response(JSON.stringify({ success: false, error: "Company has no Sellsy ID — sync the client first" }), {
+      status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // 3. Build invoice rows
+  const items: JsonRecord[] = ((order as any).order_items ?? []).map((item: any) => {
+    const product = item.products ?? {};
+    const hasItem = Boolean(product.sellsy_id);
+
+    if (hasItem) {
+      const row: JsonRecord = {
+        type: "item",
+        item_id: String(product.sellsy_id),
+        description: String(item.product_name ?? product.name ?? ""),
+        unit_amount: Number(item.price_per_kg),
+        quantity: Number(item.quantity),
+        discount: 0,
+        discount_type: "percent",
+      };
+      if (product.sellsy_tax_id) {
+        row.tax_id = String(product.sellsy_tax_id);
+      }
+      return row;
+    }
+
+    return {
+      type: "once",
+      description: String(item.product_name ?? "Product"),
+      unit_amount: Number(item.price_per_kg),
+      quantity: Number(item.quantity),
+      discount: 0,
+      discount_type: "percent",
+    };
+  });
+
+  // 4. Build invoice date — today
+  const today = new Date().toISOString().slice(0, 10);
+  const dueDateFinal = dueDate ?? (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const invoicePayload: JsonRecord = {
+    company_id: String(companySellsyId),
+    date: today,
+    due_date: dueDateFinal,
+    subject,
+    currency: "EUR",
+    note,
+    rows: items,
+  };
+
+  if (contactSellsyId) {
+    invoicePayload.contact_id = String(contactSellsyId);
+  }
+
+  // 5. POST to Sellsy
+  let token: string;
+  try {
+    token = await getSellsyAccessToken();
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: `Sellsy auth failed: ${String(e)}` }), {
+      status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const sellsyResult = await fetchSellsy("/v2/invoices", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(invoicePayload),
+  });
+
+  if (!sellsyResult.response.ok) {
+    const errText = sellsyResult.payload.text ?? JSON.stringify(sellsyResult.payload);
+    return new Response(JSON.stringify({ success: false, error: `Sellsy API error ${sellsyResult.response.status}: ${errText}` }), {
+      status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const sellsyData = sellsyResult.payload.data as JsonRecord;
+  const invoiceId = String((sellsyData as any)?.data?.id ?? "");
+  const invoiceUrl = String((sellsyData as any)?.data?._links?.self?.href ?? "");
+
+  // 6. Update orders row
+  await supabaseClient.from("orders").update({
+    sellsy_invoice_id: invoiceId,
+    sellsy_invoice_status: "draft",
+    sellsy_invoice_error: null,
+    invoiced_at: new Date().toISOString(),
+  }).eq("id", orderId);
+
+  return new Response(JSON.stringify({ success: true, invoice_id: invoiceId, invoice_url: invoiceUrl }), {
+    status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1095,6 +1244,10 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "sync-client") {
       return await handleClientSync(user, accessToken, body);
+    }
+
+    if (body?.mode === "create-invoice") {
+      return await handleCreateInvoice(createServiceSupabaseClient(), body);
     }
 
     return await handleOrderSync(user, accessToken, body);
