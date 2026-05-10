@@ -422,6 +422,13 @@ export function InvoicingView({ onBadgeCount }: InvoicingViewProps) {
         return next;
       });
       return { success: true };
+    } catch (err) {
+      // Network-level failure (e.g., timeout, CORS) — record as error so bulk send sees it
+      const msg = String(err);
+      setOrders((prev) => prev.map((o) => o.id === orderId
+        ? { ...o, sellsy_invoice_status: "error", sellsy_invoice_error: msg }
+        : o));
+      return { success: false, error: msg };
     } finally {
       setSendingIds((prev) => { const s = new Set(prev); s.delete(orderId); return s; });
     }
