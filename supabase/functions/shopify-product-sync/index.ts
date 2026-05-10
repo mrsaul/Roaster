@@ -49,6 +49,7 @@ async function fetchAllShopifyProducts(): Promise<ShopifyProduct[]> {
 
     if (!res.ok) {
       const text = await res.text();
+      console.error("Shopify API error", res.status, text);
       throw new Error(`Shopify API error ${res.status}: ${text}`);
     }
 
@@ -73,6 +74,8 @@ serve(async (req) => {
     if (!SHOPIFY_STORE || !SHOPIFY_TOKEN) {
       throw new Error("SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_API_TOKEN env var not set");
     }
+
+    console.log("shopify-product-sync: store =", SHOPIFY_STORE);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 

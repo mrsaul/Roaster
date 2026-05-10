@@ -1,177 +1,145 @@
-import { useMemo } from "react";
-import { format, parseISO, isToday, isTomorrow } from "date-fns";
-import { Truck, Clock3, Weight, CheckSquare, Package } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { format, isToday, isTomorrow, parseISO } from "date-fns";
+import { Truck, CheckCircle2, Circle, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { useDeliveryOrders, useHandOffToCarrier, type AppRole } from "@/hooks/useOperationsData";
+import { Badge } from "@/components/ui/badge";
+import { useDeliveryOrders, useHandOffToCarrier } from "@/hooks/useOperationsData";
+import type { AppRole } from "@/hooks/useOperationsData";
+
+/* ─── helpers ─── */
+
+function dateHeading(dateStr: string): string {
+  const d = parseISO(dateStr);
+  if (isToday(d)) return "Today";
+  if (isTomorrow(d)) return "Tomorrow";
+  return format(d, "EEE, MMM d");
+}
+
+function customerLabel(order: {
+  client_name: string | null;
+  shopify_customer_name: string | null;
+  shopify_order_number?: string | null;
+}): string {
+  if (order.client_name) return order.client_name;
+  if (order.shopify_customer_name) return order.shopify_customer_name;
+  if (order.shopify_order_number) return `#${order.shopify_order_number}`;
+  return "—";
+}
+
+function CheckItem({ done, label }: { done: boolean; label: string }) {
+  return (
+    <span className={`flex items-center gap-1 text-xs ${done ? "text-success" : "text-muted-foreground"}`}>
+      {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+      {label}
+    </span>
+  );
+}
+
+/* ─── Component ─── */
 
 interface DeliveryViewProps {
   role: AppRole;
 }
 
-function formatDelivery(dateStr: string) {
-  try {
-    const d = parseISO(dateStr);
-    if (isToday(d)) return "Today";
-    if (isTomorrow(d)) return "Tomorrow";
-    return format(d, "EEE d MMM");
-  } catch {
-    return dateStr;
-  }
-}
-
-export function DeliveryView({ role }: DeliveryViewProps) {
+export default function DeliveryView({ role }: DeliveryViewProps) {
   const { data: orders = [], isLoading } = useDeliveryOrders();
   const handOff = useHandOffToCarrier();
 
-  // Group by delivery date, today first then ascending
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof orders>();
-    for (const o of orders) {
-      const key = o.delivery_date;
-      const arr = map.get(key) ?? [];
-      arr.push(o);
-      map.set(key, arr);
-    }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, list]) => ({ date, list }));
-  }, [orders]);
-
-  const totalKg = orders.reduce((s, o) => s + o.total_kg, 0);
-  const todayCount = orders.filter((o) => isToday(parseISO(o.delivery_date))).length;
-
   if (isLoading) {
-    return <p className="text-center text-muted-foreground py-8">Loading…</p>;
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+        Loading delivery orders…
+      </div>
+    );
   }
 
-  return (
-    <section className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Ready to deliver</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{orders.length}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Total kg</p>
-          <p className="text-2xl font-medium tabular-nums text-foreground">{totalKg.toFixed(0)}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-xs text-muted-foreground mb-2">Due today</p>
-          <p className={cn("text-2xl font-medium tabular-nums", todayCount > 0 ? "text-destructive" : "text-foreground")}>
-            {todayCount}
-          </p>
-        </div>
+  if (orders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
+        <Truck className="w-8 h-8 opacity-40" />
+        <p className="text-sm">No orders ready for delivery</p>
       </div>
+    );
+  }
 
-      {orders.length === 0 ? (
-        <div className="bg-card border border-border rounded-lg p-8 text-center text-muted-foreground">
-          <Truck className="w-8 h-8 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">No orders ready for delivery</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {groups.map(({ date, list }) => (
-            <div key={date}>
-              {/* Date heading */}
-              <div className="flex items-center gap-2 mb-2">
-                <Clock3 className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  {formatDelivery(date)}
-                </span>
-                <span className="text-xs text-muted-foreground">· {list.length} order{list.length !== 1 ? "s" : ""}</span>
-              </div>
+  // Group by delivery_date
+  const grouped = new Map<string, typeof orders>();
+  for (const o of orders) {
+    const list = grouped.get(o.delivery_date) ?? [];
+    list.push(o);
+    grouped.set(o.delivery_date, list);
+  }
 
-              <div className="space-y-2">
-                {list.map((order) => (
-                  <div key={order.id} className="bg-card border border-border rounded-lg p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      {/* Order info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm text-foreground">
-                            {order.client_name ?? `#${order.id.slice(0, 8)}`}
-                          </span>
-                          {order.shopify_order_number && (
-                            <Badge className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
-                              Shopify
-                            </Badge>
-                          )}
-                        </div>
+  const canHandOff = role === "admin";
 
-                        {/* Items */}
-                        <div className="mt-2 space-y-0.5">
-                          {order.items.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Package className="w-3 h-3 shrink-0" />
-                              <span>{item.product_name}</span>
-                              <span className="tabular-nums">· {item.quantity} kg</span>
-                            </div>
-                          ))}
-                        </div>
+  return (
+    <div className="space-y-6">
+      {[...grouped.entries()].map(([date, dayOrders]) => (
+        <section key={date}>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            {dateHeading(date)}
+            <span className="ml-2 normal-case font-normal">
+              — {dayOrders.length} order{dayOrders.length !== 1 ? "s" : ""}
+            </span>
+          </h2>
 
-                        {/* Checklist dots */}
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <div className={cn("w-2 h-2 rounded-full", order.is_roasted ? "bg-success" : "bg-border")} />
-                            Roasted
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <div className={cn("w-2 h-2 rounded-full", order.is_packed ? "bg-success" : "bg-border")} />
-                            Packed
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <div className={cn("w-2 h-2 rounded-full", order.is_labeled ? "bg-success" : "bg-border")} />
-                            Labeled
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
-                            <Weight className="w-3 h-3" />
-                            {order.total_kg.toFixed(0)} kg
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action — admin only */}
-                      {role === "admin" && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" className="gap-1.5 shrink-0">
-                              <Truck className="w-3.5 h-3.5" /> Hand off
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hand off to carrier?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will mark the order as <span className="font-medium">Delivered</span> and cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handOff.mutate(order.id)}
-                                disabled={handOff.isPending}
-                              >
-                                <CheckSquare className="w-3.5 h-3.5 mr-1.5" /> Confirm
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
+          <div className="space-y-3">
+            {dayOrders.map((order) => (
+              <div
+                key={order.id}
+                className="bg-card border border-border rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+              >
+                {/* Left: order info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-medium text-sm truncate">
+                      {customerLabel(order)}
+                    </span>
+                    {order.shopify_order_number && (
+                      <Badge variant="outline" className="text-xs font-mono">
+                        #{order.shopify_order_number}
+                      </Badge>
+                    )}
+                    <Badge variant="secondary" className="text-xs">
+                      {order.total_kg} kg
+                    </Badge>
                   </div>
-                ))}
+
+                  {/* Items */}
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2">
+                    {order.items.map((item, idx) => (
+                      <span key={idx} className="text-xs text-muted-foreground">
+                        <Package className="w-3 h-3 inline mr-0.5" />
+                        {item.product_name} × {item.quantity}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Checklist badges */}
+                  <div className="flex gap-3 flex-wrap">
+                    <CheckItem done={order.is_roasted} label="Roasted" />
+                    <CheckItem done={order.is_packed} label="Packed" />
+                    <CheckItem done={order.is_labeled} label="Labeled" />
+                  </div>
+                </div>
+
+                {/* Right: action */}
+                {canHandOff && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="shrink-0 gap-1.5"
+                    disabled={handOff.isPending}
+                    onClick={() => handOff.mutate(order.id)}
+                  >
+                    <Truck className="w-4 h-4" />
+                    Handed off to carrier
+                  </Button>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
