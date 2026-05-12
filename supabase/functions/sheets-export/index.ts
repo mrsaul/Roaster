@@ -1,4 +1,14 @@
-// supabase/functions/sheets-export/index.ts
+// ── PluralRoaster — Monthly Orders Google Sheets Export ──────────────────────
+// Called from OrdersView ("Export to Sheet" button). Creates a new Google
+// Sheet per month (YYYY-MM), writes one row per order line item, deduplicates
+// via the sheet_exports table, and stamps exported orders with
+// exported_to_sheet_at.
+//
+// Customer name resolution (post-Sellsy schema migration):
+//   1. orders.client_name     — set for Shopify orders
+//   2. contacts join via user_id → last_name / first_name
+//   3. Fallback: "Unknown customer"
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
@@ -278,13 +288,14 @@ Deno.serve(async (req) => {
       .from("orders")
       .select(`
         id,
+        user_id,
+        client_name,
         status,
         total_kg,
         total_price,
         delivery_date,
         created_at,
         notes,
-        profiles ( full_name ),
         order_items (
           id,
           product_id,
@@ -303,6 +314,22 @@ Deno.serve(async (req) => {
 
     if (fetchError) throw new Error(`Orders fetch failed: ${fetchError.message}`);
 
+    // Build user_id → display name map via contacts (post-Sellsy schema migration)
+    const userIds = [...new Set(
+      (rows ?? []).map((o: any) => o.user_id).filter(Boolean) as string[]
+    )];
+    const contactNameMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: contactRows } = await supabase
+        .from("contacts")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+      for (const c of contactRows ?? []) {
+        const name = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
+        if (c.user_id && name) contactNameMap.set(c.user_id, name);
+      }
+    }
+
     console.log(`[sheets-export] Fetched ${rows?.length ?? 0} orders`);
 
     // 4. BUILD rows array
@@ -318,11 +345,12 @@ Deno.serve(async (req) => {
 
     type OrderRow = {
       id: string;
+      user_id: string | null;
+      client_name: string | null;
       status: string;
       total_price: number;
       delivery_date: string;
       created_at: string;
-      profiles: { full_name: string } | null;
       order_items: ItemRow[];
       shopify_orders: { shopify_order_number: string | null }[] | null;
     };
@@ -342,7 +370,10 @@ Deno.serve(async (req) => {
       const shopifyNum = Array.isArray(order.shopify_orders) && order.shopify_orders.length > 0
         ? (order.shopify_orders[0].shopify_order_number ?? "")
         : "";
-      const customerName = order.profiles?.full_name ?? "Shopify customer";
+      const customerName =
+        order.client_name ||
+        (order.user_id ? contactNameMap.get(order.user_id) : null) ||
+        "Unknown customer";
       const deliveryDate = order.delivery_date ?? "";
 
       orderIds.push(order.id);
