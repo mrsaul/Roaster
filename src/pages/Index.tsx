@@ -183,14 +183,20 @@ const Index = () => {
     // Regular user — check onboarding via contacts→companies
     const { data: contact } = await supabase
       .from("contacts")
-      .select("id, company_id, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode)")
+      .select("id, company_id, last_name, first_name, companies(id, onboarding_status, name, email, phone, siret, vat_number, legal_company_name, preferred_delivery_days, delivery_time_window, delivery_instructions, coffee_type, estimated_weekly_volume, grinder_type, notes, current_step, client_data_mode, company_addresses(label, address_line1, address_line2))")
       .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
       .maybeSingle();
 
     const company = (contact?.companies as any) ?? null;
     if (!contact || !company || company.onboarding_status !== "completed") {
+      // contact_name lives in contacts.last_name (set by user_save_onboarding_progress)
+      const contactName = [contact?.first_name, contact?.last_name].filter(Boolean).join(" ").trim() || null;
+      // delivery address lives in company_addresses (label = "Delivery")
+      const addresses = (company?.company_addresses as any[]) ?? [];
+      const deliveryAddr = addresses.find((a: any) => a.label === "Delivery") ?? null;
       setOnboardingData(company ? {
         company_name: company.name,
+        contact_name: contactName,
         email: company.email,
         phone: company.phone,
         siret: company.siret,
@@ -198,6 +204,8 @@ const Index = () => {
         legal_company_name: company.legal_company_name,
         preferred_delivery_days: company.preferred_delivery_days ?? [],
         delivery_time_window: company.delivery_time_window,
+        delivery_address: deliveryAddr?.address_line1 ?? null,
+        delivery_instructions: deliveryAddr?.address_line2 ?? company.delivery_instructions ?? null,
         coffee_type: company.coffee_type,
         estimated_weekly_volume: company.estimated_weekly_volume,
         grinder_type: company.grinder_type,
