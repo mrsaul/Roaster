@@ -2,12 +2,6 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
-// ─── NOTE ────────────────────────────────────────────────────────────────────
-// Two schema constraints must be relaxed before this function can insert rows:
-//   ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
-//   ALTER TABLE public.order_status_history ALTER COLUMN changed_by DROP NOT NULL;
-// Add a migration for both before deploying.
-// ─────────────────────────────────────────────────────────────────────────────
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
