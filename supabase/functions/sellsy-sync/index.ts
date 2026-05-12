@@ -1,4 +1,18 @@
-// HIDDEN — Sellsy sync disabled. Preserved for future use.
+// ── PluralRoaster — Sellsy Sync & Invoicing ──────────────────────────────────
+// Multi-mode edge function. All modes require an authenticated admin user.
+//
+// ACTIVE (called from the UI):
+//   create-invoice  — push a draft invoice to Sellsy v2 for a given order
+//   health-check    — verify Sellsy env vars, OAuth token, and API connectivity
+//
+// UI-HIDDEN (fully implemented, not yet exposed in the admin panel):
+//   sync-products   — pull Sellsy items → upsert products table
+//   list-clients    — list Sellsy companies/contacts (read-only)
+//   sync-all-clients — bulk pull Sellsy companies → companies/contacts tables
+//   sync-client     — pull a single Sellsy company → update companies/contacts
+//
+// Default (no mode field): creates a Sellsy order (legacy, rarely used)
+// ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
